@@ -205,7 +205,7 @@
       nitroBoost: BASE.nitroBoost + n * 0.03,
       nitroTank: 100 + n * 45,
       nitroDrain: 0.8 - n * 0.08,
-      nitroRegen: 0.10 + n * 0.03,
+      nitroRegen: 0.03 + n * 0.01,    // velmi pomalé samovolné dobíjení; hlavně se sbírá
     };
   }
 
@@ -228,7 +228,7 @@
       this.prevX = 0; this.prevY = 0;
       this.lapGates = 0;       // celkový počet projetých branek
       this.nextGate = 1;
-      this.nitro = this.phys.nitroTank;
+      this.nitro = Math.min(this.phys.nitroTank, 50);
       this.finished = false;
       this.finishTime = 0;
       this.rumble = 0;
@@ -253,7 +253,7 @@
       this.cashBonus = 0;
       this.lapGates = 0;
       this.nextGate = 1;
-      this.nitro = this.phys.nitroTank;
+      this.nitro = Math.min(this.phys.nitroTank, 50);
       this.finished = false;
       this.finishTime = 0;
       this._aiTarget = 1;
@@ -320,19 +320,24 @@
     const speedMul = car.boostTime > 0 ? 1.35 : 1;
     const gripMul = car.gripTime > 0 ? 1.4 : 1;
 
-    const usingNitro = input.nitro && car.nitro > 0 && input.up;
+    const a = car.angle, cosA = Math.cos(a), sinA = Math.sin(a);
+
+    // NITRO = nastřádaná zásoba, kterou hráč vypustí klávesou (i bez plynu)
+    const usingNitro = input.nitro && car.nitro > 0;
     car.boosting = usingNitro || car.boostTime > 0;
     let maxSpeed = (onTrack ? P.maxSpeed : P.offMaxSpeed) * speedMul * surf.speed;
     let accel = P.accel;
     if (usingNitro) {
-      maxSpeed = P.nitroMaxSpeed * speedMul * surf.speed;
+      maxSpeed = Math.max(maxSpeed, P.nitroMaxSpeed * speedMul);
       accel += P.nitroBoost;
       car.nitro = Math.max(0, car.nitro - P.nitroDrain);
+      car.vx += cosA * P.nitroBoost * 0.6;   // přímý tah i bez plynu
+      car.vy += sinA * P.nitroBoost * 0.6;
     } else {
-      car.nitro = Math.min(P.nitroTank, car.nitro + P.nitroRegen);
+      car.nitro = Math.min(P.nitroTank, car.nitro + P.nitroRegen);   // jen velmi pomalé dobíjení
     }
+    if (car.boostTime > 0) maxSpeed = Math.max(maxSpeed, (onTrack ? P.maxSpeed : P.offMaxSpeed) * 1.35);
 
-    const a = car.angle, cosA = Math.cos(a), sinA = Math.sin(a);
     // motor působí podél směru auta
     if (input.up) { car.vx += cosA * accel; car.vy += sinA * accel; }
     if (input.down) { car.vx -= cosA * P.reverseAccel; car.vy -= sinA * P.reverseAccel; }
@@ -525,7 +530,7 @@
   const API = {
     WORLD_W, WORLD_H, GATE_COUNT, FIXED_DT,
     TRACKS, UPGRADE_DEFS, BASE,
-    catmullRomClosed, buildTrack, isOnTrack, computePhys,
+    catmullRomClosed, buildTrack, isOnTrack, surfaceAt, computePhys,
     Car, World, aiInput, stepCar, checkGate,
   };
 
