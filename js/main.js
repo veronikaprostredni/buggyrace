@@ -33,14 +33,15 @@
     if (PREVENT.has(e.code)) e.preventDefault();
     Sound.init();   // odemkne audio po prvním gestu
     pressed[e.code] = true;
-    if (e.code === "Enter") {
+    if (e.code === "Enter" && !inOnline) {
       if (state === STATE.MENU) startGame();
       else if (state === STATE.FINISHED) {
         if (!shop.classList.contains("hidden")) nextChampRace();
         else doResultsAction();
       }
     }
-    if (e.code === "KeyR" && (state === STATE.RACE || state === STATE.FINISHED)) toMenu();
+    if (e.code === "KeyR" && !inOnline && !netGame.active &&
+        (state === STATE.RACE || state === STATE.FINISHED)) toMenu();
     if (e.code === "KeyM") updateMuteBtn(Sound.toggleMute());
   });
   window.addEventListener("keyup", (e) => { pressed[e.code] = false; });
@@ -315,7 +316,9 @@
   }
 
   function doResultsAction() {
-    if (resultsAction === "menu") toMenu();
+    if (resultsAction === "online-again") { results.classList.add("hidden"); Net.again(); }
+    else if (resultsAction === "online-leave") { results.classList.add("hidden"); leaveOnline(); }
+    else if (resultsAction === "menu") toMenu();
     else startGame();
   }
 
@@ -330,6 +333,7 @@
   /* ---------------- Aktualizace ---------------- */
   let acc = 0;
   function update(dt) {
+    if (netGame.active) { updateOnline(dt); return; }
     if (state === STATE.COUNTDOWN) {
       countdown -= dt;
       const ci = Math.ceil(countdown - 1);   // 3,2,1,0(=GO)
@@ -525,16 +529,17 @@
     ctx.fillText("NITRO", px + w - 14, y + 33);
   }
 
-  function drawCountdown() {
+  function drawCountdown(value) {
     ctx.fillStyle = "rgba(0,0,0,0.45)";
     ctx.fillRect(0, 0, W, H);
-    const n = Math.ceil(countdown - 1);
+    const n = Math.ceil(value - 1);
     ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = "#f6c544";
     if (n > 0) { ctx.font = "bold 160px 'Segoe UI', sans-serif"; ctx.fillText(n, W / 2, H / 2); }
     else { ctx.font = "bold 120px 'Segoe UI', sans-serif"; ctx.fillText("START!", W / 2, H / 2); }
   }
 
   function render() {
+    if (netGame.active) { renderOnline(); return; }
     if (!world) {
       // náhled vybrané trati v menu
       drawTrack(IMR.buildTrack(IMR.TRACKS[selectedTrack]));
@@ -543,8 +548,255 @@
     drawTrack(world.track);
     for (const c of world.cars) drawCar(c);
     drawHUD();
-    if (state === STATE.COUNTDOWN) drawCountdown();
+    if (state === STATE.COUNTDOWN) drawCountdown(countdown);
   }
+
+  /* =====================================================================
+     ONLINE REŽIM (síťový multiplayer)
+     ===================================================================== */
+  const Net = window.Net;
+  let inOnline = false;            // je otevřené online překrytí?
+  const netGame = {
+    active: false, track: null, laps: 3, gateCount: IMR.GATE_COUNT,
+    meta: {}, cars: {}, disp: {}, phase: "countdown", time: 0, countdown: 0,
+    lastInputStr: "", lastCountInt: 4, lobby: null,
+  };
+
+  const onlineOverlay = document.getElementById("online");
+  const onlineConnect = document.getElementById("onlineConnect");
+  const onlineLobby = document.getElementById("onlineLobby");
+
+  function openOnline() {
+    inOnline = true;
+    overlay.classList.add("hidden");
+    results.classList.add("hidden");
+    onlineConnect.classList.remove("hidden");
+    onlineLobby.classList.add("hidden");
+    document.getElementById("netError").textContent = "";
+    onlineOverlay.classList.remove("hidden");
+    Sound.init();
+    if (!Net.connected) Net.connect();
+  }
+
+  function leaveOnline() {
+    Net.close();
+    inOnline = false;
+    netGame.active = false;
+    Sound.stopAllEngines();
+    onlineOverlay.classList.add("hidden");
+    overlay.classList.remove("hidden");
+  }
+
+  /* ----- síťové události ----- */
+  Net.on("error", (m) => {
+    const el = document.getElementById("netError");
+    if (el) el.textContent = m.msg || "Chyba spojení.";
+  });
+  Net.on("close", () => {
+    if (netGame.active || inOnline) {
+      const el = document.getElementById("netError");
+      if (el) el.textContent = "Spojení se serverem bylo přerušeno.";
+    }
+  });
+
+  Net.on("lobby", (m) => {
+    netGame.lobby = m;
+    netGame.active = false;
+    state = STATE.MENU;
+    Sound.stopAllEngines();
+    inOnline = true;
+    onlineOverlay.classList.remove("hidden");
+    onlineConnect.classList.add("hidden");
+    results.classList.add("hidden");
+    onlineLobby.classList.remove("hidden");
+    renderLobby(m);
+  });
+
+  Net.on("raceStart", (m) => {
+    netGame.track = IMR.buildTrack(IMR.TRACKS[m.trackIndex] || IMR.TRACKS[0]);
+    netGame.laps = m.laps;
+    netGame.meta = {};
+    for (const c of m.cars) netGame.meta[c.id] = { name: c.name, color: c.color, isAI: c.isAI };
+    netGame.cars = {}; netGame.disp = {};
+    netGame.phase = "countdown";
+    netGame.countdown = 3.999;
+    netGame.lastCountInt = 4;
+    netGame.active = true;
+    state = STATE.RACE;
+    onlineOverlay.classList.add("hidden");
+    results.classList.add("hidden");
+    Sound.init();
+  });
+
+  Net.on("state", (m) => {
+    netGame.phase = m.phase;
+    netGame.time = m.time;
+    netGame.countdown = m.countdown;
+    for (const c of m.cars) {
+      netGame.cars[c.id] = c;
+      if (!netGame.disp[c.id]) netGame.disp[c.id] = { x: c.x, y: c.y, a: c.a };
+    }
+    if (m.phase === "countdown") {
+      const ci = Math.ceil(m.countdown - 1);
+      if (ci < netGame.lastCountInt && ci >= 0) { Sound.countdownTick(ci); netGame.lastCountInt = ci; }
+    }
+  });
+
+  Net.on("finished", (m) => {
+    Sound.stopAllEngines();
+    Sound.finishFanfare();
+    const isHost = netGame.lobby && netGame.lobby.hostId === Net.you;
+    document.getElementById("winnerTitle").textContent = `🏁 ${m.ranking[0].name} vyhrává!`;
+    document.getElementById("winnerTitle").style.color = m.ranking[0].color;
+    document.getElementById("againBtn").textContent = isHost ? "ZPĚT DO LOBBY" : "ZPĚT DO MENU";
+    resultsAction = isHost ? "online-again" : "online-leave";
+    document.getElementById("resultTimes").innerHTML = m.ranking.map((c, i) =>
+      `<div class="row" style="color:${c.color}"><span>${i + 1}. ${c.name}</span>` +
+      `<span>${c.finished ? formatTime(c.finishTime) : "—"}</span></div>`).join("");
+    results.classList.remove("hidden");
+  });
+
+  /* ----- vykreslení lobby ----- */
+  function renderLobby(m) {
+    document.getElementById("roomCode").textContent = m.code;
+    const list = document.getElementById("lobbyPlayers");
+    list.innerHTML = m.players.map((p) =>
+      `<li style="border-color:${p.color}"><span class="dotc" style="background:${p.color}"></span>${p.name}${p.host ? " 👑" : ""}${p.id === Net.you ? " (ty)" : ""}</li>`).join("");
+
+    const isHost = m.hostId === Net.you;
+    const hostOpts = document.getElementById("lobbyHostOpts");
+    const startBtn = document.getElementById("netStartBtn");
+    const status = document.getElementById("lobbyStatus");
+    hostOpts.style.opacity = isHost ? "1" : "0.55";
+    hostOpts.style.pointerEvents = isHost ? "auto" : "none";
+    startBtn.style.display = isHost ? "inline-block" : "none";
+    status.textContent = isHost ? "Až budou všichni připraveni, spusť závod." : "Čekání na hostitele…";
+
+    buildNetGroup("netTrackSel", m.tracks.map((t, i) => ({ label: t.name, value: i })), m.opts.trackIndex, (v) => Net.setOpts({ trackIndex: v }), isHost);
+    buildNetGroup("netLapsSel", [1, 2, 3, 5].map((n) => ({ label: String(n), value: n })), m.opts.laps, (v) => Net.setOpts({ laps: v }), isHost);
+    buildNetGroup("netAiSel", [0, 1, 2, 3, 4].map((n) => ({ label: String(n), value: n })), m.opts.aiCount, (v) => Net.setOpts({ aiCount: v }), isHost);
+    buildNetGroup("netAiDiffSel", [{ label: "Snadní", value: "easy" }, { label: "Normální", value: "normal" }, { label: "Těžcí", value: "hard" }], m.opts.aiDifficulty, (v) => Net.setOpts({ aiDifficulty: v }), isHost);
+  }
+
+  function buildNetGroup(id, options, current, onPick, enabled) {
+    const wrap = document.getElementById(id);
+    if (!wrap) return;
+    wrap.innerHTML = "";
+    options.forEach((opt) => {
+      const btn = document.createElement("button");
+      btn.className = "opt-btn" + (opt.value === current ? " active" : "");
+      btn.textContent = opt.label;
+      if (enabled) btn.addEventListener("click", () => onPick(opt.value));
+      wrap.appendChild(btn);
+    });
+  }
+
+  /* ----- online update & render ----- */
+  function onlineInput() {
+    return {
+      up: down("KeyW") || down("ArrowUp"),
+      down: down("KeyS") || down("ArrowDown"),
+      left: down("KeyA") || down("ArrowLeft"),
+      right: down("KeyD") || down("ArrowRight"),
+      nitro: down("ShiftLeft") || down("ShiftRight"),
+    };
+  }
+
+  function updateOnline() {
+    if (netGame.phase === "countdown" || netGame.phase === "race") {
+      const inp = onlineInput();
+      const s = JSON.stringify(inp);
+      if (s !== netGame.lastInputStr) { Net.sendInput(inp); netGame.lastInputStr = s; }
+    }
+    // zvuk motoru lokálního hráče
+    const me = netGame.cars[Net.you];
+    if (me) {
+      const ratio = Math.min(1, Math.abs(me.sp || 0) / 6);
+      Sound.updateEngine("self", ratio, netGame.phase === "race" && !me.f);
+      Sound.setNitro("self", !!me.b);
+    }
+  }
+
+  function renderOnline() {
+    drawTrack(netGame.track);
+    const k = 0.35;
+    for (const id in netGame.cars) {
+      const t = netGame.cars[id];
+      const d = netGame.disp[id];
+      d.x += (t.x - d.x) * k;
+      d.y += (t.y - d.y) * k;
+      let da = t.a - d.a;
+      while (da > Math.PI) da -= Math.PI * 2;
+      while (da < -Math.PI) da += Math.PI * 2;
+      d.a += da * k;
+      const meta = netGame.meta[id] || { color: "#ccc", name: id, isAI: false };
+      drawCar({ x: d.x, y: d.y, angle: d.a, color: meta.color, boosting: !!t.b, isAI: meta.isAI, name: meta.name });
+    }
+    drawOnlineHUD();
+    if (netGame.phase === "countdown") drawCountdown(netGame.countdown);
+  }
+
+  function drawOnlineHUD() {
+    // čas
+    ctx.fillStyle = "rgba(0,0,0,0.45)";
+    roundRect(ctx, W / 2 - 70, 12, 140, 34, 8); ctx.fill();
+    ctx.fillStyle = "#f6c544";
+    ctx.font = "bold 22px 'Segoe UI', sans-serif";
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText(formatTime(netGame.time), W / 2, 30);
+
+    // panel lokálního hráče
+    const me = netGame.cars[Net.you];
+    const meta = netGame.meta[Net.you];
+    if (me && meta) {
+      const lap = Math.min(Math.floor(me.lg / netGame.gateCount) + 1, netGame.laps);
+      const w = 184, h = 64, px = 16, y = 16;
+      ctx.fillStyle = "rgba(0,0,0,0.42)";
+      roundRect(ctx, px, y, w, h, 10); ctx.fill();
+      ctx.fillStyle = meta.color; roundRect(ctx, px, y, 6, h, 3); ctx.fill();
+      ctx.textBaseline = "top"; ctx.textAlign = "left";
+      ctx.fillStyle = meta.color; ctx.font = "bold 15px 'Segoe UI', sans-serif";
+      ctx.fillText(meta.name + " (ty)", px + 14, y + 8);
+      ctx.fillStyle = "#fff"; ctx.font = "13px 'Segoe UI', sans-serif";
+      ctx.fillText(`Kolo ${lap}/${netGame.laps}`, px + 14, y + 28);
+      ctx.fillStyle = "rgba(255,255,255,0.2)";
+      roundRect(ctx, px + 14, y + 46, w - 28, 9, 4); ctx.fill();
+      ctx.fillStyle = "#f6c544";
+      roundRect(ctx, px + 14, y + 46, (w - 28) * Math.max(0, me.n / (me.nt || 100)), 9, 4); ctx.fill();
+      ctx.fillStyle = "#cfd8cf"; ctx.font = "10px 'Segoe UI', sans-serif"; ctx.textAlign = "right";
+      ctx.fillText("NITRO", px + w - 14, y + 33);
+    }
+
+    // vedoucí
+    let leader = null;
+    for (const id in netGame.cars) {
+      const c = netGame.cars[id];
+      if (!leader || c.lg > netGame.cars[leader].lg) leader = id;
+    }
+    if (leader) {
+      ctx.fillStyle = "rgba(0,0,0,0.4)";
+      roundRect(ctx, W / 2 - 75, 50, 150, 24, 6); ctx.fill();
+      ctx.fillStyle = (netGame.meta[leader] || {}).color || "#fff";
+      ctx.font = "bold 14px 'Segoe UI', sans-serif"; ctx.textAlign = "center";
+      ctx.fillText(`▲ ${(netGame.meta[leader] || {}).name || ""} vede`, W / 2, 62);
+    }
+  }
+
+  /* ----- online UI wiring ----- */
+  document.getElementById("onlineBtn").addEventListener("click", openOnline);
+  document.getElementById("onlineBackBtn").addEventListener("click", leaveOnline);
+  document.getElementById("lobbyLeaveBtn").addEventListener("click", leaveOnline);
+  document.getElementById("createRoomBtn").addEventListener("click", () => {
+    const name = (document.getElementById("netName").value || "Hráč").trim().slice(0, 14);
+    if (Net.connected) Net.create(name); else Net.connect(() => Net.create(name));
+  });
+  document.getElementById("joinRoomBtn").addEventListener("click", () => {
+    const name = (document.getElementById("netName").value || "Hráč").trim().slice(0, 14);
+    const code = (document.getElementById("joinCode").value || "").trim().toUpperCase();
+    if (!code) { document.getElementById("netError").textContent = "Zadej kód místnosti."; return; }
+    if (Net.connected) Net.join(code, name); else Net.connect(() => Net.join(code, name));
+  });
+  document.getElementById("netStartBtn").addEventListener("click", () => Net.start());
 
   /* ---------------- Hlavní smyčka ---------------- */
   let last = performance.now();
