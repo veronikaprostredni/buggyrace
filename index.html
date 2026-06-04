@@ -9,12 +9,17 @@
 <body>
   <div id="stage">
     <canvas id="game" width="1000" height="680"></canvas>
+    <button id="muteBtn" class="mute-btn" title="Ztlumit / zapnout zvuk (M)">🔊</button>
+    <button id="fsBtn" class="mute-btn fs-btn" title="Celá obrazovka (F)">⛶</button>
 
     <!-- Úvodní obrazovka -->
     <div id="overlay" class="overlay">
       <div class="panel">
         <h1>IRON MAN<span>OFFROAD RACING</span></h1>
         <p class="tag">Top-down offroad závod pro dva hráče &mdash; remake klasiky z DOSu</p>
+
+        <h3 class="section-title">Herní režim</h3>
+        <div id="modeSelect" class="opt-group" style="justify-content:center;margin-bottom:6px"></div>
 
         <div class="controls">
           <div class="player p1">
@@ -37,9 +42,84 @@
           </div>
         </div>
 
+        <h3 class="section-title">Vyber trať</h3>
+        <div id="trackSelect" class="track-select"></div>
+
+        <div class="opt-row">
+          <div class="opt-col">
+            <h3 class="section-title">Lidští hráči</h3>
+            <div id="humanSelect" class="opt-group"></div>
+          </div>
+          <div class="opt-col">
+            <h3 class="section-title">AI soupeři</h3>
+            <div id="aiSelect" class="opt-group"></div>
+          </div>
+          <div class="opt-col">
+            <h3 class="section-title">Obtížnost AI</h3>
+            <div id="aiDiffSelect" class="opt-group"></div>
+          </div>
+        </div>
+
         <p class="laps-note">Závod na <b>3 kola</b>. Kdo dojede první, vyhrává!</p>
         <button id="startBtn">START ZÁVODU</button>
+        <button id="onlineBtn" class="secondary-btn">🌐 Hrát online (více zařízení)</button>
         <p class="hint">Tip: hru spustíš i klávesou <b>Enter</b>, restart kdykoli <b>R</b>.</p>
+      </div>
+    </div>
+
+    <!-- Online lobby -->
+    <div id="online" class="overlay hidden">
+      <div class="panel">
+        <!-- připojení -->
+        <div id="onlineConnect">
+          <h1>HRÁT ONLINE</h1>
+          <p class="tag">Každý hráč na svém zařízení. Vytvoř místnost a pošli kód kamarádům, nebo se připoj kódem.</p>
+          <div class="net-form">
+            <label>Tvé jméno</label>
+            <input id="netName" maxlength="14" placeholder="Hráč" />
+          </div>
+          <div class="net-actions">
+            <button id="createRoomBtn">VYTVOŘIT MÍSTNOST</button>
+          </div>
+          <div class="net-join">
+            <input id="joinCode" maxlength="4" placeholder="KÓD" />
+            <button id="joinRoomBtn">PŘIPOJIT SE</button>
+          </div>
+          <p id="netError" class="net-error"></p>
+          <button id="onlineBackBtn" class="secondary-btn">‹ Zpět</button>
+        </div>
+
+        <!-- lobby -->
+        <div id="onlineLobby" class="hidden">
+          <h1>MÍSTNOST <span id="roomCode" class="room-code"></span></h1>
+          <p class="tag">Sdílej kód s ostatními. Hráči se připojují na stejné adrese.</p>
+          <div class="lobby-grid">
+            <div class="lobby-players-box">
+              <h3 class="section-title">Hráči</h3>
+              <ul id="lobbyPlayers" class="lobby-players"></ul>
+            </div>
+            <div id="lobbyHostOpts" class="lobby-opts">
+              <h3 class="section-title">Nastavení (jen hostitel)</h3>
+              <div class="lobby-opt"><span>Trať</span><div id="netTrackSel" class="opt-group"></div></div>
+              <div class="lobby-opt"><span>Kola</span><div id="netLapsSel" class="opt-group"></div></div>
+              <div class="lobby-opt"><span>AI soupeři</span><div id="netAiSel" class="opt-group"></div></div>
+              <div class="lobby-opt"><span>Obtížnost AI</span><div id="netAiDiffSel" class="opt-group"></div></div>
+            </div>
+          </div>
+          <button id="netStartBtn">START ZÁVODU</button>
+          <p id="lobbyStatus" class="hint"></p>
+          <button id="lobbyLeaveBtn" class="secondary-btn">‹ Opustit místnost</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Obchod s vylepšeními (mezi závody v šampionátu) -->
+    <div id="shop" class="overlay hidden">
+      <div class="panel shop-panel">
+        <h1 id="shopTitle">OBCHOD</h1>
+        <p id="shopSub" class="tag"></p>
+        <div id="shopPlayers" class="shop-players"></div>
+        <button id="nextRaceBtn">DALŠÍ ZÁVOD ▶</button>
       </div>
     </div>
 
@@ -54,6 +134,9 @@
     </div>
   </div>
 
-  <script src="game.js"></script>
+  <script src="js/sim.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/net.js"></script>
+  <script src="js/main.js"></script>
 </body>
 </html>

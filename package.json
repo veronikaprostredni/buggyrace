@@ -1,0 +1,12 @@
+{
+  "name": "iron-man-offroad-racing",
+  "version": "1.0.0",
+  "description": "Moderní webový remake offroad závodní hry pro 2+ hráče – lokálně i online přes síť.",
+  "scripts": {
+    "start": "node server/server.js"
+  },
+  "engines": {
+    "node": ">=16"
+  },
+  "license": "MIT"
+}
