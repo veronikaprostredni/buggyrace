@@ -17,6 +17,9 @@
         <h1>IRON MAN<span>OFFROAD RACING</span></h1>
         <p class="tag">Top-down offroad závod pro dva hráče &mdash; remake klasiky z DOSu</p>
 
+        <h3 class="section-title">Herní režim</h3>
+        <div id="modeSelect" class="opt-group" style="justify-content:center;margin-bottom:6px"></div>
+
         <div class="controls">
           <div class="player p1">
             <h2>Hráč 1 &mdash; červený</h2>
@@ -59,6 +62,16 @@
         <p class="laps-note">Závod na <b>3 kola</b>. Kdo dojede první, vyhrává!</p>
         <button id="startBtn">START ZÁVODU</button>
         <p class="hint">Tip: hru spustíš i klávesou <b>Enter</b>, restart kdykoli <b>R</b>.</p>
+      </div>
+    </div>
+
+    <!-- Obchod s vylepšeními (mezi závody v šampionátu) -->
+    <div id="shop" class="overlay hidden">
+      <div class="panel shop-panel">
+        <h1 id="shopTitle">OBCHOD</h1>
+        <p id="shopSub" class="tag"></p>
+        <div id="shopPlayers" class="shop-players"></div>
+        <button id="nextRaceBtn">DALŠÍ ZÁVOD ▶</button>
       </div>
     </div>
 

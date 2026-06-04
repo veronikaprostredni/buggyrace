@@ -33,7 +33,13 @@
     if (PREVENT.has(e.code)) e.preventDefault();
     Sound.init();   // odemkne audio po prvním gestu
     pressed[e.code] = true;
-    if (e.code === "Enter" && state === STATE.MENU) startRace();
+    if (e.code === "Enter") {
+      if (state === STATE.MENU) startGame();
+      else if (state === STATE.FINISHED) {
+        if (!shop.classList.contains("hidden")) nextChampRace();
+        else doResultsAction();
+      }
+    }
     if (e.code === "KeyR" && (state === STATE.RACE || state === STATE.FINISHED)) toMenu();
     if (e.code === "KeyM") updateMuteBtn(Sound.toggleMute());
   });
@@ -44,9 +50,14 @@
   }
 
   /* ---------------- Konfigurace závodu ---------------- */
+  let gameMode = "quick";     // "quick" | "champ"
   let humanCount = 2;
   let aiCount = 0;
   let aiDifficulty = "normal";
+  const CHAMP_RACES = 5;
+  const PAYOUT = [700, 450, 300, 200, 120, 80];   // peníze dle umístění
+  let champ = null;           // stav šampionátu
+  let resultsAction = "again";
   const AI_SKILL = { easy: 0.62, normal: 0.82, hard: 0.96 };
   const AI_COLORS = ["#f59e0b", "#34c759", "#a855f7", "#22d3ee"];
   const AI_NAMES = ["CPU Rudák", "CPU Bleskoun", "CPU Drtič", "CPU Liška"];
@@ -58,15 +69,25 @@
 
   function activeControllers() { return HUMAN_CONTROLLERS.slice(0, humanCount); }
 
+  function aiUpgradeLevel(raceIndex) { return Math.min(3, Math.floor(raceIndex * 0.8)); }
+
   /* ---------------- Sestavení aut ---------------- */
   function makeCars() {
-    const cars = activeControllers().map((ctrl) =>
-      new IMR.Car({ id: ctrl.id, color: ctrl.color, name: ctrl.name }));
+    const cars = activeControllers().map((ctrl) => {
+      const car = new IMR.Car({ id: ctrl.id, color: ctrl.color, name: ctrl.name });
+      if (champ) car.setUpgrades(champ.players[ctrl.id].upgrades);
+      return car;
+    });
     for (let i = 0; i < aiCount; i++) {
-      cars.push(new IMR.Car({
+      const car = new IMR.Car({
         id: "ai" + i, color: AI_COLORS[i % AI_COLORS.length], name: AI_NAMES[i % AI_NAMES.length],
         isAI: true, aiSkill: AI_SKILL[aiDifficulty],
-      }));
+      });
+      if (champ) {
+        const lvl = aiUpgradeLevel(champ.raceIndex);
+        car.setUpgrades({ engine: lvl, accel: lvl, tires: lvl, nitro: lvl });
+      }
+      cars.push(car);
     }
     return cars;
   }
@@ -87,9 +108,16 @@
     if (b) b.textContent = muted ? "🔇" : "🔊";
   }
 
-  function startRace() {
+  const shop = document.getElementById("shop");
+
+  function startGame() {
     Sound.init();
-    world = new IMR.World(IMR.TRACKS[selectedTrack], makeCars(), TOTAL_LAPS);
+    if (gameMode === "champ") startChampionship();
+    else { champ = null; beginRace(IMR.TRACKS[selectedTrack]); }
+  }
+
+  function beginRace(trackDef) {
+    world = new IMR.World(trackDef, makeCars(), TOTAL_LAPS);
     world.running = false;
     countdown = 3.999;
     lastCountInt = 4;
@@ -97,6 +125,34 @@
     state = STATE.COUNTDOWN;
     overlay.classList.add("hidden");
     results.classList.add("hidden");
+    shop.classList.add("hidden");
+  }
+
+  /* ---------------- Šampionát ---------------- */
+  function startChampionship() {
+    const n = IMR.TRACKS.length;
+    const trackOrder = [];
+    for (let i = 0; i < CHAMP_RACES; i++) trackOrder.push((selectedTrack + i) % n);
+    const players = {};
+    for (const ctrl of activeControllers())
+      players[ctrl.id] = { name: ctrl.name, color: ctrl.color, money: 0, upgrades: { engine: 0, accel: 0, tires: 0, nitro: 0 } };
+    const wins = {};
+    const participants = activeControllers().map((c) => ({ id: c.id, name: c.name, color: c.color }));
+    for (const c of activeControllers()) wins[c.id] = 0;
+    for (let i = 0; i < aiCount; i++) {
+      wins["ai" + i] = 0;
+      participants.push({ id: "ai" + i, name: AI_NAMES[i % AI_NAMES.length], color: AI_COLORS[i % AI_COLORS.length] });
+    }
+    champ = { raceIndex: 0, totalRaces: CHAMP_RACES, trackOrder, players, wins, participants };
+    beginRace(IMR.TRACKS[trackOrder[0]]);
+  }
+
+  function awardChampionship(ranked) {
+    ranked.forEach((c, i) => {
+      const p = champ.players[c.id];
+      if (p) p.money += PAYOUT[i] != null ? PAYOUT[i] : 60;
+    });
+    champ.wins[ranked[0].id] = (champ.wins[ranked[0].id] || 0) + 1;
   }
 
   function finishRace() {
@@ -104,14 +160,103 @@
     Sound.stopAllEngines();
     for (const c of world.cars) Sound.setNitro(c.id, false);
     const ranked = world.ranking();
+
+    if (champ) {
+      awardChampionship(ranked);
+      champ.raceIndex++;
+      if (champ.raceIndex < champ.totalRaces) { showShop(ranked); return; }
+      showFinalStandings(ranked);
+      return;
+    }
+    showQuickResults(ranked);
+  }
+
+  function showQuickResults(ranked) {
     const winner = ranked[0];
     document.getElementById("winnerTitle").textContent = `🏁 ${winner.name} vyhrává!`;
     document.getElementById("winnerTitle").style.color = winner.color;
+    document.getElementById("againBtn").textContent = "ZÁVODIT ZNOVU";
+    resultsAction = "again";
     const box = document.getElementById("resultTimes");
     box.innerHTML = ranked.map((c, i) =>
       `<div class="row" style="color:${c.color}"><span>${i + 1}. ${c.name}</span>` +
       `<span>${c.finished ? formatTime(c.finishTime) : "—"}</span></div>`).join("");
     results.classList.remove("hidden");
+  }
+
+  function showFinalStandings(ranked) {
+    const standings = [...champ.participants].sort((a, b) => (champ.wins[b.id] || 0) - (champ.wins[a.id] || 0));
+    const champion = standings[0];
+    document.getElementById("winnerTitle").textContent = `🏆 Šampion: ${champion.name}`;
+    document.getElementById("winnerTitle").style.color = champion.color;
+    document.getElementById("againBtn").textContent = "ZPĚT DO MENU";
+    resultsAction = "menu";
+    const box = document.getElementById("resultTimes");
+    box.innerHTML = standings.map((p, i) =>
+      `<div class="row" style="color:${p.color}"><span>${i + 1}. ${p.name}</span>` +
+      `<span>${champ.wins[p.id] || 0}× 🥇</span></div>`).join("");
+    results.classList.remove("hidden");
+  }
+
+  /* ---------------- Obchod ---------------- */
+  function showShop(ranked) {
+    state = STATE.FINISHED;
+    document.getElementById("shopTitle").textContent =
+      `OBCHOD — závod ${champ.raceIndex}/${champ.totalRaces} hotov`;
+    const winLine = `Závod vyhrál ${ranked[0].name}. Utrať výhru za vylepšení!`;
+    document.getElementById("shopSub").textContent = winLine;
+    renderShop();
+    shop.classList.remove("hidden");
+    results.classList.add("hidden");
+  }
+
+  function renderShop() {
+    const wrap = document.getElementById("shopPlayers");
+    wrap.innerHTML = "";
+    for (const ctrl of activeControllers()) {
+      const p = champ.players[ctrl.id];
+      const col = document.createElement("div");
+      col.className = "shop-col";
+      let html = `<div class="shop-name" style="color:${p.color}">${p.name}</div>` +
+        `<div class="shop-money">💰 ${p.money}</div>`;
+      for (const key of Object.keys(IMR.UPGRADE_DEFS)) {
+        const def = IMR.UPGRADE_DEFS[key];
+        const lvl = p.upgrades[key];
+        const dots = Array.from({ length: def.max }, (_, i) =>
+          `<span class="dot ${i < lvl ? "on" : ""}"></span>`).join("");
+        let action;
+        if (lvl >= def.max) action = `<span class="maxed">MAX</span>`;
+        else {
+          const cost = def.cost[lvl + 1];
+          const afford = p.money >= cost;
+          action = `<button class="buy-btn" data-pid="${ctrl.id}" data-key="${key}" ${afford ? "" : "disabled"}>${cost} 💰</button>`;
+        }
+        html += `<div class="shop-item"><div class="shop-item-top"><b>${def.name}</b>${action}</div>` +
+          `<div class="dots">${dots}</div><div class="shop-desc">${def.desc}</div></div>`;
+      }
+      col.innerHTML = html;
+      wrap.appendChild(col);
+    }
+    wrap.querySelectorAll(".buy-btn").forEach((b) => b.addEventListener("click", () => {
+      buyUpgrade(b.dataset.pid, b.dataset.key);
+    }));
+  }
+
+  function buyUpgrade(pid, key) {
+    const p = champ.players[pid];
+    const def = IMR.UPGRADE_DEFS[key];
+    const lvl = p.upgrades[key];
+    if (lvl >= def.max) return;
+    const cost = def.cost[lvl + 1];
+    if (p.money < cost) return;
+    p.money -= cost;
+    p.upgrades[key] = lvl + 1;
+    Sound.countdownTick(2);   // krátké cinknutí
+    renderShop();
+  }
+
+  function nextChampRace() {
+    beginRace(IMR.TRACKS[champ.trackOrder[champ.raceIndex]]);
   }
 
   function formatTime(t) {
@@ -155,6 +300,9 @@
   }
 
   function buildOptionUI() {
+    buildOptionGroup("modeSelect",
+      [{ label: "🏁 Rychlý závod", value: "quick" }, { label: "🏆 Šampionát (5 závodů + obchod)", value: "champ" }],
+      () => gameMode, (v) => { gameMode = v; });
     buildOptionGroup("humanSelect",
       [{ label: "1", value: 1 }, { label: "2", value: 2 }],
       () => humanCount, (v) => { humanCount = v; });
@@ -166,8 +314,14 @@
       () => aiDifficulty, (v) => { aiDifficulty = v; });
   }
 
-  document.getElementById("startBtn").addEventListener("click", startRace);
-  document.getElementById("againBtn").addEventListener("click", startRace);
+  function doResultsAction() {
+    if (resultsAction === "menu") toMenu();
+    else startGame();
+  }
+
+  document.getElementById("startBtn").addEventListener("click", startGame);
+  document.getElementById("againBtn").addEventListener("click", doResultsAction);
+  document.getElementById("nextRaceBtn").addEventListener("click", nextChampRace);
   document.getElementById("muteBtn").addEventListener("click", () => {
     Sound.init();
     updateMuteBtn(Sound.toggleMute());
@@ -329,6 +483,14 @@
     ctx.font = "bold 22px 'Segoe UI', sans-serif";
     ctx.textAlign = "center"; ctx.textBaseline = "middle";
     ctx.fillText(formatTime(world.time), W / 2, 30);
+
+    if (champ) {
+      ctx.fillStyle = "rgba(0,0,0,0.4)";
+      roundRect(ctx, W / 2 - 50, 76, 100, 22, 6); ctx.fill();
+      ctx.fillStyle = "#cfd8cf";
+      ctx.font = "bold 12px 'Segoe UI', sans-serif";
+      ctx.fillText(`🏆 Závod ${champ.raceIndex + 1}/${champ.totalRaces}`, W / 2, 87);
+    }
 
     const rank = world.ranking();
     if (rank.length && (rank[0].lapGates !== (rank[1] ? rank[1].lapGates : -1))) {

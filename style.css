@@ -211,6 +211,49 @@ button {
 }
 button:active { transform: translateY(3px); box-shadow: 0 3px 0 #b8910f; }
 
+/* Obchod */
+.shop-panel { width: min(94%, 820px); }
+.shop-players {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin: 14px 0 18px;
+}
+.shop-col {
+  flex: 1 1 280px;
+  max-width: 360px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+.shop-name { font-size: 18px; font-weight: 700; }
+.shop-money { font-size: 16px; color: var(--accent); margin-bottom: 10px; }
+.shop-item {
+  text-align: left;
+  padding: 8px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.shop-item-top { display: flex; justify-content: space-between; align-items: center; }
+.shop-desc { font-size: 11px; color: #93a397; margin-top: 2px; }
+.dots { display: flex; gap: 5px; margin-top: 5px; }
+.dot {
+  width: 14px; height: 8px; border-radius: 3px;
+  background: rgba(255, 255, 255, 0.15);
+}
+.dot.on { background: var(--accent); }
+.buy-btn {
+  font-size: 13px; font-weight: 700;
+  padding: 5px 12px; border-radius: 7px;
+  box-shadow: 0 3px 0 #b8910f;
+}
+.buy-btn:disabled {
+  opacity: 0.4; cursor: not-allowed;
+  background: #6b6b5a; box-shadow: none; color: #2a2a22;
+}
+.maxed { color: #34c759; font-weight: 700; font-size: 13px; }
+
 .hint { color: #8ea093; font-size: 13px; margin-top: 14px; }
 .times { font-size: 18px; line-height: 1.8; margin: 6px 0 18px; }
 .times .row { display: flex; justify-content: space-between; max-width: 360px; margin: 0 auto; }
