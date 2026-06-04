@@ -38,6 +38,25 @@ canvas {
   image-rendering: optimizeQuality;
 }
 
+.mute-btn {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  font-size: 20px;
+  line-height: 42px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: none;
+  cursor: pointer;
+  z-index: 5;
+}
+.mute-btn:active { transform: none; }
+
 /* Overlaye */
 .overlay {
   position: absolute;

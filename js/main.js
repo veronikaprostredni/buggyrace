@@ -12,11 +12,14 @@
   const FIXED_DT = IMR.FIXED_DT;
   const TOTAL_LAPS = 3;
 
+  const Sound = window.Sound;
   const STATE = { MENU: "menu", COUNTDOWN: "countdown", RACE: "race", FINISHED: "finished" };
   let state = STATE.MENU;
   let countdown = 0;
+  let lastCountInt = 4;       // pro odpočtové pípnutí
   let world = null;
   let selectedTrack = 0;
+  let finishPlayed = false;
 
   /* ---------------- Klávesy ---------------- */
   const pressed = {};
@@ -28,9 +31,11 @@
 
   window.addEventListener("keydown", (e) => {
     if (PREVENT.has(e.code)) e.preventDefault();
+    Sound.init();   // odemkne audio po prvním gestu
     pressed[e.code] = true;
     if (e.code === "Enter" && state === STATE.MENU) startRace();
     if (e.code === "KeyR" && (state === STATE.RACE || state === STATE.FINISHED)) toMenu();
+    if (e.code === "KeyM") updateMuteBtn(Sound.toggleMute());
   });
   window.addEventListener("keyup", (e) => { pressed[e.code] = false; });
 
@@ -52,14 +57,23 @@
 
   function toMenu() {
     state = STATE.MENU;
+    Sound.stopAllEngines();
     overlay.classList.remove("hidden");
     results.classList.add("hidden");
   }
 
+  function updateMuteBtn(muted) {
+    const b = document.getElementById("muteBtn");
+    if (b) b.textContent = muted ? "🔇" : "🔊";
+  }
+
   function startRace() {
+    Sound.init();
     world = new IMR.World(IMR.TRACKS[selectedTrack], makeLocalCars(), TOTAL_LAPS);
     world.running = false;
     countdown = 3.999;
+    lastCountInt = 4;
+    finishPlayed = false;
     state = STATE.COUNTDOWN;
     overlay.classList.add("hidden");
     results.classList.add("hidden");
@@ -67,6 +81,8 @@
 
   function finishRace() {
     state = STATE.FINISHED;
+    Sound.stopAllEngines();
+    for (const c of world.cars) Sound.setNitro(c.id, false);
     const ranked = world.ranking();
     const winner = ranked[0];
     document.getElementById("winnerTitle").textContent = `🏁 ${winner.name} vyhrává!`;
@@ -103,12 +119,18 @@
 
   document.getElementById("startBtn").addEventListener("click", startRace);
   document.getElementById("againBtn").addEventListener("click", startRace);
+  document.getElementById("muteBtn").addEventListener("click", () => {
+    Sound.init();
+    updateMuteBtn(Sound.toggleMute());
+  });
 
   /* ---------------- Aktualizace ---------------- */
   let acc = 0;
   function update(dt) {
     if (state === STATE.COUNTDOWN) {
       countdown -= dt;
+      const ci = Math.ceil(countdown - 1);   // 3,2,1,0(=GO)
+      if (ci < lastCountInt && ci >= 0) { Sound.countdownTick(ci); lastCountInt = ci; }
       if (countdown <= 1 && !world.running) world.running = true;  // "START!" = jede se
       if (countdown <= 0) state = STATE.RACE;
     }
@@ -116,11 +138,27 @@
       const inputs = { p1: inputFor(P1_KEYS), p2: inputFor(P2_KEYS) };
       acc += dt;
       let guard = 0;
+      let collided = false;
       while (acc >= FIXED_DT && guard++ < 6) {
-        world.tick(inputs);
+        const events = world.tick(inputs);
+        for (const ev of events) {
+          if (ev.type === "collision") collided = true;
+          if (ev.type === "finish" && !finishPlayed) { Sound.finishFanfare(); finishPlayed = true; }
+        }
         acc -= FIXED_DT;
       }
+      if (collided) Sound.collision();
+      updateEngineSounds();
       if (state === STATE.RACE && world.allFinished()) finishRace();
+    }
+  }
+
+  function updateEngineSounds() {
+    for (const c of world.cars) {
+      if (c.isAI || c.remote) continue;   // zvuk motoru jen pro místní hráče
+      const ratio = Math.min(1, Math.abs(c.speed) / c.phys.maxSpeed);
+      Sound.updateEngine(c.id, ratio, !c.finished);
+      Sound.setNitro(c.id, c.boosting);
     }
   }
 
