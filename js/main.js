@@ -12,6 +12,26 @@
   const FIXED_DT = IMR.FIXED_DT;
   const TOTAL_LAPS = 3;
 
+  /* ---------------- Kamera / přizpůsobení obrazovce ---------------- */
+  let viewScale = 1;
+  function resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const cw = canvas.clientWidth || window.innerWidth;
+    const ch = canvas.clientHeight || window.innerHeight;
+    canvas.width = Math.round(cw * dpr);
+    canvas.height = Math.round(ch * dpr);
+  }
+  // svět (0..W, 0..H) se vejde na celou obrazovku se zachováním poměru
+  function setCamera() {
+    const s = Math.min(canvas.width / W, canvas.height / H);
+    viewScale = s;
+    const offX = (canvas.width - W * s) / 2;
+    const offY = (canvas.height - H * s) / 2;
+    ctx.setTransform(s, 0, 0, s, offX, offY);
+  }
+  window.addEventListener("resize", resize);
+  resize();
+
   const Sound = window.Sound;
   const STATE = { MENU: "menu", COUNTDOWN: "countdown", RACE: "race", FINISHED: "finished" };
   let state = STATE.MENU;
@@ -43,6 +63,7 @@
     if (e.code === "KeyR" && !inOnline && !netGame.active &&
         (state === STATE.RACE || state === STATE.FINISHED)) toMenu();
     if (e.code === "KeyM") updateMuteBtn(Sound.toggleMute());
+    if (e.code === "KeyF") toggleFullscreen();
   });
   window.addEventListener("keyup", (e) => { pressed[e.code] = false; });
 
@@ -330,6 +351,17 @@
     updateMuteBtn(Sound.toggleMute());
   });
 
+  function toggleFullscreen() {
+    const el = document.documentElement;
+    if (!document.fullscreenElement) {
+      (el.requestFullscreen || el.webkitRequestFullscreen || (() => {})).call(el);
+    } else {
+      (document.exitFullscreen || document.webkitExitFullscreen || (() => {})).call(document);
+    }
+  }
+  document.getElementById("fsBtn").addEventListener("click", toggleFullscreen);
+  document.addEventListener("fullscreenchange", () => setTimeout(resize, 60));
+
   /* ---------------- Aktualizace ---------------- */
   let acc = 0;
   function update(dt) {
@@ -403,9 +435,15 @@
       ctx.fillStyle = hexA(th.grassDark, g.a);
       ctx.beginPath(); ctx.arc(g.x, g.y, g.r, 0, Math.PI * 2); ctx.fill();
     }
-    strokePath(track.center, track.width + 14, th.dirtEdge);
-    strokePath(track.center, track.width, th.dirt);
-    strokePath(track.center, track.width - 34, th.rut);
+    const w = track.width;
+    // plastický, vyvýšený profil trati: stín -> krajnice -> tmavé okraje -> světlý střed
+    strokePath(track.center, w + 30, "rgba(0,0,0,0.22)");          // měkký stín pod tratí
+    strokePath(track.center, w + 16, shade(th.dirtEdge, 1.3));     // vyvýšená krajnice (lip)
+    strokePath(track.center, w + 6, shade(th.dirtEdge, 0.8));      // rýha za krajnicí
+    strokePath(track.center, w, shade(th.dirt, 0.7));              // tmavý okraj cesty
+    strokePath(track.center, w - 18, th.dirt);                     // hlína
+    strokePath(track.center, w - 44, shade(th.dirt, 1.16));        // nasvícený vyvýšený střed
+    strokePath(track.center, Math.max(6, w - 82), shade(th.rut, 1.22)); // světlý hřbet
     drawStartLine(track);
   }
   function strokePath(center, width, color) {
@@ -539,6 +577,12 @@
   }
 
   function render() {
+    // pozadí (letterbox) + kamera
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = "#0a120c";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    setCamera();
+
     if (netGame.active) { renderOnline(); return; }
     if (!world) {
       // náhled vybrané trati v menu

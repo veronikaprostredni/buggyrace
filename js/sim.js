@@ -18,7 +18,7 @@
       id: "dusty",
       name: "Prašná smyčka",
       difficulty: "Střední",
-      width: 86,
+      width: 108,
       theme: { grass: "#2f5a37", grassDark: "#214027", dirt: "#8a6e42", dirtEdge: "#6b5634", rut: "#7d6238" },
       waypoints: [
         { x: 200, y: 150 }, { x: 470, y: 110 }, { x: 760, y: 140 }, { x: 880, y: 300 },
@@ -29,7 +29,7 @@
       id: "canyon",
       name: "Hadí kaňon",
       difficulty: "Těžká",
-      width: 78,
+      width: 100,
       theme: { grass: "#6b5a3a", grassDark: "#564834", dirt: "#b08a55", dirtEdge: "#8a6c40", rut: "#a07c48" },
       waypoints: [
         { x: 150, y: 230 }, { x: 330, y: 130 }, { x: 520, y: 210 }, { x: 700, y: 120 }, { x: 880, y: 250 },
@@ -40,7 +40,7 @@
       id: "oval",
       name: "Velký ovál",
       difficulty: "Snadná",
-      width: 90,
+      width: 116,
       theme: { grass: "#33683f", grassDark: "#234a2c", dirt: "#9a7b48", dirtEdge: "#76603a", rut: "#8a6e40" },
       waypoints: [
         { x: 200, y: 150 }, { x: 500, y: 120 }, { x: 800, y: 150 }, { x: 890, y: 340 },
@@ -51,7 +51,7 @@
       id: "stadium",
       name: "Noční stadion",
       difficulty: "Střední",
-      width: 84,
+      width: 106,
       theme: { grass: "#283042", grassDark: "#1d2433", dirt: "#7c6f55", dirtEdge: "#5d533f", rut: "#6e6249" },
       waypoints: [
         { x: 200, y: 160 }, { x: 500, y: 120 }, { x: 800, y: 160 }, { x: 880, y: 340 },
