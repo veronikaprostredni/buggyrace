@@ -13,8 +13,12 @@ JavaScript, server v Node.js **bez jakýchkoli externích závislostí**.
 - 🛣️ **4 tratě** s vlastní geometrií a barevným motivem
 - 🏆 **Šampionát** — série 5 závodů s **nakupováním vylepšení** mezi koly
   (motor, zrychlení, pneumatiky, nitro) za vyhrané peníze, jako v originále
-- 🔊 **Zvuky** motorů (výška dle rychlosti), nitra, nárazů, odpočtu a cíle
-- 🔥 Nitro turbo, vzájemné narážení aut, terén mimo trať zpomaluje
+- 🔊 **Zvuky** motorů (výška dle rychlosti), nitra, nárazů, odpočtu, sběru a cíle
+- 🖥️ **Hra na celou obrazovku** (tlačítko / klávesa **F**), široká plastická trať
+- 🧪 **Propracovaná fyzika** — vektor rychlosti, přilnavost a smyk (drift)
+- 🟥 **Terén ve stylu originálu** — červeno-bílé mantinely, blátivé a vodní louže
+- 🎁 **Balíčky odměn** na trati — nitro, peníze, pneumatiky (grip), zrychlení
+- 🔥 Nitro turbo, vzájemné narážení aut
 
 ## ▶️ Spuštění
 
