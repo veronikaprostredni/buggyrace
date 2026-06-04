@@ -12,8 +12,11 @@
   const FIXED_DT = IMR.FIXED_DT;
   const TOTAL_LAPS = 3;
 
-  /* ---------------- Kamera / přizpůsobení obrazovce ---------------- */
-  let viewScale = 1;
+  /* ---------------- Kamera / 2.5D perspektiva (~75°) ---------------- */
+  const TILT = 0.74;        // svislé stlačení (1 = shora, méně = nakloněnější pohled)
+  const WALL_H = 16;        // výška mantinelu (svět px) pro plastický 3D dojem
+  let camS = 1, camOffX = 0, camOffY = 0;
+
   function resize() {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const cw = canvas.clientWidth || window.innerWidth;
@@ -21,16 +24,61 @@
     canvas.width = Math.round(cw * dpr);
     canvas.height = Math.round(ch * dpr);
   }
-  // svět (0..W, 0..H) se vejde na celou obrazovku se zachováním poměru
-  function setCamera() {
-    const s = Math.min(canvas.width / W, canvas.height / H);
-    viewScale = s;
-    const offX = (canvas.width - W * s) / 2;
-    const offY = (canvas.height - H * s) / 2;
-    ctx.setTransform(s, 0, 0, s, offX, offY);
+  function computeCamera() {
+    camS = Math.min(canvas.width / W, canvas.height / (H * TILT + WALL_H * 2));
+    camOffX = (canvas.width - W * camS) / 2;
+    camOffY = (canvas.height - H * TILT * camS) / 2 + WALL_H * camS;
   }
+  function setGround() { ctx.setTransform(camS, 0, 0, camS * TILT, camOffX, camOffY); }   // zem (stlačená)
+  function setHud() { ctx.setTransform(camS, 0, 0, camS, camOffX, camOffY); }             // HUD (bez stlačení)
+  function projX(x) { return camOffX + x * camS; }
+  function projY(y) { return camOffY + y * camS * TILT; }
   window.addEventListener("resize", resize);
   resize();
+
+  /* ---------------- Částicové efekty (prach, bláto, nitro) ---------------- */
+  const particles = [];
+  function spawnParticle(x, y, vx, vy, life, size, color) {
+    if (particles.length > 320) return;
+    particles.push({ x, y, vx, vy, life, max: life, size, color });
+  }
+  function updateParticles(dt) {
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.x += p.vx; p.y += p.vy; p.vx *= 0.9; p.vy *= 0.9; p.life -= dt;
+      if (p.life <= 0) particles.splice(i, 1);
+    }
+  }
+  function drawParticles() {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    for (const p of particles) {
+      const a = Math.max(0, p.life / p.max);
+      ctx.globalAlpha = a;
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(projX(p.x), projY(p.y), p.size * camS * (0.4 + a * 0.6), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+  // efekty za autem: nitro jiskry, bahno/voda, prach
+  function spawnCarFx(track, x, y, angle, speed, boosting) {
+    const bx = x - Math.cos(angle) * 15, by = y - Math.sin(angle) * 15;
+    const surf = IMR.surfaceAt(track, x, y);
+    if (boosting) {
+      for (let i = 0; i < 2; i++)
+        spawnParticle(bx, by, -Math.cos(angle) * 1.2 + (Math.random() - 0.5), -Math.sin(angle) * 1.2 + (Math.random() - 0.5),
+          0.4, 5 + Math.random() * 4, Math.random() < 0.5 ? "#ffd24a" : "#ff7a1a");
+    }
+    if (surf.rough && speed > 0.6) {
+      const water = surf.speed < 0.55;
+      for (let i = 0; i < 2; i++)
+        spawnParticle(bx, by, (Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2,
+          0.5, 4 + Math.random() * 4, water ? "#9fd0e8" : "#6b4a28");
+    } else if (speed > 2.2 && Math.random() < 0.5) {
+      spawnParticle(bx, by, (Math.random() - 0.5), (Math.random() - 0.5), 0.4, 4, "rgba(190,170,130,0.7)");
+    }
+  }
 
   const Sound = window.Sound;
   const STATE = { MENU: "menu", COUNTDOWN: "countdown", RACE: "race", FINISHED: "finished" };
@@ -365,6 +413,7 @@
   /* ---------------- Aktualizace ---------------- */
   let acc = 0;
   function update(dt) {
+    updateParticles(dt);
     if (netGame.active) { updateOnline(dt); return; }
     if (state === STATE.COUNTDOWN) {
       countdown -= dt;
@@ -389,6 +438,7 @@
         acc -= FIXED_DT;
       }
       if (collided) Sound.collision();
+      for (const c of world.cars) if (!c.finished) spawnCarFx(world.track, c.x, c.y, c.angle, Math.abs(c.speed), c.boosting);
       updateEngineSounds();
       if (state === STATE.RACE && world.allFinished()) finishRace();
     }
@@ -428,25 +478,49 @@
     for (let i = 0; i < 90; i++) GRASS.push({ x: rnd() * W, y: rnd() * H, r: 6 + rnd() * 22, a: 0.05 + rnd() * 0.06 });
   })();
 
-  function drawTrack(track) {
+  function drawBackdrop() {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    const g = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    g.addColorStop(0, "#10180f"); g.addColorStop(1, "#050805");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+
+  function drawGround(track) {
     const th = track.theme;
     ctx.fillStyle = th.grass;
-    ctx.fillRect(0, 0, W, H);
+    ctx.fillRect(-40, -40, W + 80, H + 80);
     for (const g of GRASS) {
       ctx.fillStyle = hexA(th.grassDark, g.a);
       ctx.beginPath(); ctx.arc(g.x, g.y, g.r, 0, Math.PI * 2); ctx.fill();
     }
     const w = track.width;
-    // plastický, vyvýšený profil trati: stín -> krajnice -> tmavé okraje -> světlý střed
-    strokePath(track.center, w + 30, "rgba(0,0,0,0.22)");          // měkký stín pod tratí
-    strokePath(track.center, w + 6, shade(th.dirt, 0.6));          // tmavý okraj cesty
-    strokePath(track.center, w, shade(th.dirt, 0.78));
-    strokePath(track.center, w - 18, th.dirt);                     // hlína
-    strokePath(track.center, w - 44, shade(th.dirt, 1.16));        // nasvícený vyvýšený střed
-    strokePath(track.center, Math.max(6, w - 82), shade(th.rut, 1.22)); // světlý hřbet
+    // plastický vyhloubený profil cesty: stín -> tmavé okraje -> hlína -> nasvícený střed
+    strokePath(track.center, w + 26, "rgba(0,0,0,0.28)");          // měkký stín
+    strokePath(track.center, w + 4, shade(th.dirt, 0.55));         // tmavý sráz okraje
+    strokePath(track.center, w, shade(th.dirt, 0.74));
+    strokePath(track.center, w - 16, th.dirt);                     // hlína
+    strokePath(track.center, w - 42, shade(th.dirt, 1.14));        // nasvícený střed
+    strokePath(track.center, Math.max(6, w - 80), shade(th.rut, 1.2));
+    drawDirtTexture(track);                                        // hrudky / koleje
     drawTerrain(track);                                            // bláto / louže
     drawStartLine(track);
-    drawBarriers(track);                                           // červeno-bílé mantinely
+  }
+
+  // deterministická textura na trati (hrudky, koleje) pro plastičtější povrch
+  function drawDirtTexture(track) {
+    const C = track.center, th = track.theme;
+    for (let i = 0; i < C.length; i += 3) {
+      const p = C[i];
+      const seed = (i * 928371) % 1000 / 1000;
+      const off = (seed - 0.5) * (track.width - 30);
+      const q = C[(i + 1) % C.length];
+      const dx = q.x - p.x, dy = q.y - p.y, len = Math.hypot(dx, dy) || 1;
+      const nx = -dy / len, ny = dx / len;
+      const x = p.x + nx * off, y = p.y + ny * off;
+      ctx.fillStyle = seed > 0.5 ? "rgba(0,0,0,0.10)" : hexA(th.rut, 0.18);
+      ctx.beginPath(); ctx.ellipse(x, y, 5 + seed * 5, 3 + seed * 3, 0, 0, Math.PI * 2); ctx.fill();
+    }
   }
 
   // bod posunutý kolmo k trati o vzdálenost d
@@ -473,28 +547,53 @@
     ctx.stroke();
     ctx.restore();
   }
-  function drawBarriers(track) {
-    const off = track.width / 2 + 7;
-    for (const side of [off, -off]) {
-      const edge = offsetPath(track.center, side);
-      strokePoly(edge, 11, "rgba(0,0,0,0.3)", null);     // stín mantinelu
-      strokePoly(edge, 9, "#e9e9e9", null);              // bílý základ
-      strokePoly(edge, 9, "#d4322a", [22, 22]);          // červené pruhy
+  // Vyvýšené červeno-bílé mantinely jako v originále (3D zdi s výškou)
+  function drawBarrierWalls(track) {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    const off = track.width / 2 + 6;
+    const wallPx = WALL_H * camS;
+    const quads = [];
+    for (const sgn of [1, -1]) {
+      const edge = offsetPath(track.center, off * sgn);
+      for (let i = 0; i < edge.length; i++) {
+        const p = edge[i], q = edge[(i + 1) % edge.length];
+        const bx0 = projX(p.x), by0 = projY(p.y), bx1 = projX(q.x), by1 = projY(q.y);
+        quads.push({ bx0, by0, bx1, by1, i, ykey: Math.max(by0, by1) });
+      }
+    }
+    quads.sort((a, b) => a.ykey - b.ykey);   // painter: vzdálené (nahoře) první
+    for (const q of quads) {
+      const stripe = Math.floor(q.i / 4) % 2 === 0;
+      const face = stripe ? "#b5302a" : "#c9c6bd";
+      const top = stripe ? "#e0463c" : "#f2efe7";
+      // boční stěna
+      ctx.fillStyle = face;
+      ctx.beginPath();
+      ctx.moveTo(q.bx0, q.by0); ctx.lineTo(q.bx1, q.by1);
+      ctx.lineTo(q.bx1, q.by1 - wallPx); ctx.lineTo(q.bx0, q.by0 - wallPx);
+      ctx.closePath(); ctx.fill();
+      // horní hrana (osvětlená)
+      ctx.strokeStyle = top; ctx.lineWidth = Math.max(2, 3 * camS); ctx.lineCap = "round";
+      ctx.beginPath(); ctx.moveTo(q.bx0, q.by0 - wallPx); ctx.lineTo(q.bx1, q.by1 - wallPx); ctx.stroke();
     }
   }
+
   function drawTerrain(track) {
     for (const z of track.terrain) {
       const water = z.type === "water";
       ctx.save();
-      ctx.beginPath(); ctx.arc(z.x, z.y, z.r, 0, Math.PI * 2);
-      ctx.fillStyle = water ? "rgba(40,90,120,0.78)" : "rgba(60,42,22,0.82)";
-      ctx.fill();
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = water ? "rgba(120,170,200,0.7)" : "rgba(30,20,10,0.6)";
-      ctx.stroke();
-      // odlesk / textura
-      ctx.beginPath(); ctx.arc(z.x - z.r * 0.3, z.y - z.r * 0.3, z.r * 0.35, 0, Math.PI * 2);
-      ctx.fillStyle = water ? "rgba(180,220,240,0.25)" : "rgba(110,80,45,0.4)";
+      // tmavý důlek (vyhloubení)
+      ctx.beginPath(); ctx.arc(z.x, z.y + 2, z.r, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(0,0,0,0.35)"; ctx.fill();
+      // hladina / bahno
+      ctx.beginPath(); ctx.arc(z.x, z.y, z.r * 0.92, 0, Math.PI * 2);
+      const grd = ctx.createRadialGradient(z.x - z.r * 0.3, z.y - z.r * 0.3, z.r * 0.1, z.x, z.y, z.r);
+      if (water) { grd.addColorStop(0, "#5b9fc4"); grd.addColorStop(1, "#1f4f6b"); }
+      else { grd.addColorStop(0, "#6b4a28"); grd.addColorStop(1, "#3a2814"); }
+      ctx.fillStyle = grd; ctx.fill();
+      // odlesk
+      ctx.beginPath(); ctx.ellipse(z.x - z.r * 0.3, z.y - z.r * 0.35, z.r * 0.34, z.r * 0.2, -0.5, 0, Math.PI * 2);
+      ctx.fillStyle = water ? "rgba(200,230,245,0.4)" : "rgba(130,95,55,0.5)";
       ctx.fill();
       ctx.restore();
     }
@@ -509,23 +608,31 @@
   };
   function drawPickups(list) {
     if (!list) return;
-    const pulse = 1 + Math.sin(Date.now() / 200) * 0.08;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    const now = Date.now();
     for (const p of list) {
       if (p.active === false) continue;
       const st = PICKUP_STYLE[p.type] || PICKUP_STYLE.money;
-      const r = 13 * pulse;
-      ctx.save();
-      ctx.translate(p.x, p.y);
+      // nitro výrazně poskakuje, ostatní jemně
+      const amp = p.type === "nitro" ? 9 : 4;
+      const bob = Math.abs(Math.sin(now / 300 + (p.id || 0))) * amp;
+      const sx = projX(p.x), sy = projY(p.y);
+      const r = 13 * camS;
+      // stín na zemi
       ctx.fillStyle = "rgba(0,0,0,0.3)";
-      ctx.beginPath(); ctx.arc(0, 3, r, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(sx, sy, r * 0.8, r * 0.4, 0, 0, Math.PI * 2); ctx.fill();
+      // tělo balíčku (vznáší se + poskakuje)
+      const cy = sy - (16 + bob) * camS;
       ctx.fillStyle = st.c;
-      ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
-      ctx.lineWidth = 2.5; ctx.strokeStyle = "rgba(255,255,255,0.85)"; ctx.stroke();
+      ctx.beginPath(); ctx.arc(sx, cy, r, 0, Math.PI * 2); ctx.fill();
+      ctx.lineWidth = 2.5 * camS; ctx.strokeStyle = "rgba(255,255,255,0.9)"; ctx.stroke();
+      // lesk
+      ctx.fillStyle = "rgba(255,255,255,0.35)";
+      ctx.beginPath(); ctx.arc(sx - r * 0.3, cy - r * 0.3, r * 0.35, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = p.type === "nitro" || p.type === "tires" ? "#fff" : "#1a1205";
-      ctx.font = "bold 15px 'Segoe UI', sans-serif";
+      ctx.font = `bold ${Math.round(15 * camS)}px 'Segoe UI', sans-serif`;
       ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      ctx.fillText(st.label, 0, 1);
-      ctx.restore();
+      ctx.fillText(st.label, sx, cy + camS);
     }
   }
   function strokePath(center, width, color) {
@@ -556,43 +663,57 @@
     return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
   }
 
+  // Auto jako billboard: poloha promítnutá perspektivou, sprite bez zkreslení,
+  // natočený podle zdánlivého (stlačeného) směru. Stín na zemi + lehká výška.
   function drawCar(c) {
+    const sx = projX(c.x), sy = projY(c.y);
+    const appAngle = Math.atan2(Math.sin(c.angle) * TILT, Math.cos(c.angle));
+    const lift = 5 * camS;   // mírné nadzvednutí (3D dojem)
+
+    // stín na zemi
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = "rgba(0,0,0,0.32)";
+    ctx.beginPath(); ctx.ellipse(sx, sy + 2 * camS, 17 * camS, 9 * camS, 0, 0, Math.PI * 2); ctx.fill();
+
+    // plamen nitra (za autem, pod karoserií)
+    if (c.boosting) {
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.translate(sx, sy - lift); ctx.rotate(appAngle); ctx.scale(camS, camS);
+      const fl = 12 + Math.random() * 12;
+      ctx.fillStyle = "rgba(255,150,40,0.9)";
+      ctx.beginPath(); ctx.moveTo(-16, -5); ctx.lineTo(-16 - fl, 0); ctx.lineTo(-16, 5); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = "rgba(255,235,140,0.95)";
+      ctx.beginPath(); ctx.moveTo(-16, -3); ctx.lineTo(-16 - fl * 0.6, 0); ctx.lineTo(-16, 3); ctx.closePath(); ctx.fill();
+      ctx.restore();
+    }
+
+    // karoserie
     ctx.save();
-    ctx.translate(c.x, c.y);
-    ctx.rotate(c.angle);
-    ctx.fillStyle = "rgba(0,0,0,0.28)";
-    roundRect(ctx, -15, -8, 30, 16, 4); ctx.fill();
-    const grd = ctx.createLinearGradient(0, -9, 0, 9);
-    grd.addColorStop(0, shade(c.color, 1.25));
-    grd.addColorStop(1, shade(c.color, 0.7));
-    ctx.fillStyle = grd;
-    roundRect(ctx, -16, -9, 32, 18, 5); ctx.fill();
-    ctx.fillStyle = "rgba(20,30,40,0.85)";
-    roundRect(ctx, -2, -6, 9, 12, 3); ctx.fill();
-    ctx.fillStyle = shade(c.color, 1.5);
-    roundRect(ctx, 11, -7, 4, 14, 2); ctx.fill();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.translate(sx, sy - lift); ctx.rotate(appAngle); ctx.scale(camS, camS);
     ctx.fillStyle = "#16181a";
     roundRect(ctx, -12, -11, 7, 4, 2); ctx.fill();
     roundRect(ctx, -12, 7, 7, 4, 2); ctx.fill();
     roundRect(ctx, 6, -11, 7, 4, 2); ctx.fill();
     roundRect(ctx, 6, 7, 7, 4, 2); ctx.fill();
+    const grd = ctx.createLinearGradient(0, -9, 0, 9);
+    grd.addColorStop(0, shade(c.color, 1.3));
+    grd.addColorStop(1, shade(c.color, 0.65));
+    ctx.fillStyle = grd;
+    roundRect(ctx, -16, -9, 32, 18, 5); ctx.fill();
+    ctx.fillStyle = "rgba(20,30,40,0.85)";
+    roundRect(ctx, -2, -6, 9, 12, 3); ctx.fill();
+    ctx.fillStyle = shade(c.color, 1.6);
+    roundRect(ctx, 11, -7, 4, 14, 2); ctx.fill();
     ctx.restore();
 
-    if (c.boosting) {
-      ctx.save();
-      ctx.translate(c.x, c.y); ctx.rotate(c.angle);
-      const fl = 10 + Math.random() * 10;
-      ctx.fillStyle = "rgba(255,150,40,0.9)";
-      ctx.beginPath(); ctx.moveTo(-16, -4); ctx.lineTo(-16 - fl, 0); ctx.lineTo(-16, 4); ctx.closePath(); ctx.fill();
-      ctx.fillStyle = "rgba(255,230,120,0.9)";
-      ctx.beginPath(); ctx.moveTo(-16, -2); ctx.lineTo(-16 - fl * 0.6, 0); ctx.lineTo(-16, 2); ctx.closePath(); ctx.fill();
-      ctx.restore();
-    }
-    // jmenovka nad autem
+    // jmenovka
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = c.color;
-    ctx.font = "bold 11px 'Segoe UI', sans-serif";
+    ctx.font = `bold ${Math.round(12 * camS)}px 'Segoe UI', sans-serif`;
     ctx.textAlign = "center"; ctx.textBaseline = "bottom";
-    ctx.fillText(c.isAI ? "CPU" : c.name, c.x, c.y - 16);
+    ctx.fillText(c.isAI ? "CPU" : c.name, sx, sy - lift - 17 * camS);
   }
 
   function drawHUD() {
@@ -650,31 +771,36 @@
   }
 
   function drawCountdown(value) {
-    ctx.fillStyle = "rgba(0,0,0,0.45)";
-    ctx.fillRect(0, 0, W, H);
+    setHud();
+    ctx.fillStyle = "rgba(0,0,0,0.4)";
+    ctx.fillRect(0, 0, W, H * TILT);
     const n = Math.ceil(value - 1);
     ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = "#f6c544";
-    if (n > 0) { ctx.font = "bold 160px 'Segoe UI', sans-serif"; ctx.fillText(n, W / 2, H / 2); }
-    else { ctx.font = "bold 120px 'Segoe UI', sans-serif"; ctx.fillText("START!", W / 2, H / 2); }
+    const cy = H * TILT / 2;
+    if (n > 0) { ctx.font = "bold 150px 'Segoe UI', sans-serif"; ctx.fillText(n, W / 2, cy); }
+    else { ctx.font = "bold 110px 'Segoe UI', sans-serif"; ctx.fillText("START!", W / 2, cy); }
+  }
+
+  // společné vykreslení scény (zem, mantinely, balíčky, auta) v perspektivě
+  function drawScene(track, carList, pickups) {
+    drawBackdrop();
+    computeCamera();
+    setGround(); drawGround(track);
+    drawBarrierWalls(track);                 // 3D mantinely (vlastní transform)
+    drawParticles();                         // prach/bahno/nitro (na zemi)
+    drawPickups(pickups);                    // billboardy
+    const sorted = [...carList].sort((a, b) => a.y - b.y);   // painter podle hloubky
+    for (const c of sorted) drawCar(c);
   }
 
   function render() {
-    // pozadí (letterbox) + kamera
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.fillStyle = "#0a120c";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    setCamera();
-
     if (netGame.active) { renderOnline(); return; }
     if (!world) {
-      // náhled vybrané trati v menu
-      drawTrack(IMR.buildTrack(IMR.TRACKS[selectedTrack]));
+      drawScene(IMR.buildTrack(IMR.TRACKS[selectedTrack]), [], []);   // náhled v menu
       return;
     }
-    drawTrack(world.track);
-    drawPickups(world.pickups);
-    for (const c of world.cars) drawCar(c);
-    drawHUD();
+    drawScene(world.track, world.cars, world.pickups);
+    setHud(); drawHUD();
     if (state === STATE.COUNTDOWN) drawCountdown(countdown);
   }
 
@@ -843,12 +969,18 @@
       Sound.updateEngine("self", ratio, netGame.phase === "race" && !me.f);
       Sound.setNitro("self", !!me.b);
     }
+    // efekty pro všechna auta podle snapshotu
+    if (netGame.track && netGame.phase === "race") {
+      for (const id in netGame.cars) {
+        const c = netGame.cars[id];
+        if (!c.f) spawnCarFx(netGame.track, c.x, c.y, c.a, Math.abs(c.sp || 0), !!c.b);
+      }
+    }
   }
 
   function renderOnline() {
-    drawTrack(netGame.track);
-    drawPickups(netGame.pickups);
     const k = 0.35;
+    const carList = [];
     for (const id in netGame.cars) {
       const t = netGame.cars[id];
       const d = netGame.disp[id];
@@ -859,9 +991,10 @@
       while (da < -Math.PI) da += Math.PI * 2;
       d.a += da * k;
       const meta = netGame.meta[id] || { color: "#ccc", name: id, isAI: false };
-      drawCar({ x: d.x, y: d.y, angle: d.a, color: meta.color, boosting: !!t.b, isAI: meta.isAI, name: meta.name });
+      carList.push({ x: d.x, y: d.y, angle: d.a, color: meta.color, boosting: !!t.b, isAI: meta.isAI, name: meta.name });
     }
-    drawOnlineHUD();
+    drawScene(netGame.track, carList, netGame.pickups);
+    setHud(); drawOnlineHUD();
     if (netGame.phase === "countdown") drawCountdown(netGame.countdown);
   }
 
