@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Iron Man Offroad Racing — Remake</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="stage">
+    <canvas id="game" width="1000" height="680"></canvas>
+
+    <!-- Úvodní obrazovka -->
+    <div id="overlay" class="overlay">
+      <div class="panel">
+        <h1>IRON MAN<span>OFFROAD RACING</span></h1>
+        <p class="tag">Top-down offroad závod pro dva hráče &mdash; remake klasiky z DOSu</p>
+
+        <div class="controls">
+          <div class="player p1">
+            <h2>Hráč 1 &mdash; červený</h2>
+            <ul>
+              <li><b>W</b> plyn</li>
+              <li><b>S</b> brzda / zpátečka</li>
+              <li><b>A / D</b> zatáčení</li>
+              <li><b>Levý Shift</b> nitro</li>
+            </ul>
+          </div>
+          <div class="player p2">
+            <h2>Hráč 2 &mdash; modrý</h2>
+            <ul>
+              <li><b>&uarr;</b> plyn</li>
+              <li><b>&darr;</b> brzda / zpátečka</li>
+              <li><b>&larr; / &rarr;</b> zatáčení</li>
+              <li><b>Pravý Shift</b> nitro</li>
+            </ul>
+          </div>
+        </div>
+
+        <p class="laps-note">Závod na <b>3 kola</b>. Kdo dojede první, vyhrává!</p>
+        <button id="startBtn">START ZÁVODU</button>
+        <p class="hint">Tip: hru spustíš i klávesou <b>Enter</b>, restart kdykoli <b>R</b>.</p>
+      </div>
+    </div>
+
+    <!-- Výsledková obrazovka -->
+    <div id="results" class="overlay hidden">
+      <div class="panel">
+        <h1 id="winnerTitle">VÍTĚZ</h1>
+        <div id="resultTimes" class="times"></div>
+        <button id="againBtn">ZÁVODIT ZNOVU</button>
+        <p class="hint">nebo stiskni <b>R</b></p>
+      </div>
+    </div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>
