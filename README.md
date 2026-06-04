@@ -14,11 +14,13 @@ JavaScript, server v Node.js **bez jakýchkoli externích závislostí**.
 - 🏆 **Šampionát** — série 5 závodů s **nakupováním vylepšení** mezi koly
   (motor, zrychlení, pneumatiky, nitro) za vyhrané peníze, jako v originále
 - 🔊 **Zvuky** motorů (výška dle rychlosti), nitra, nárazů, odpočtu, sběru a cíle
-- 🖥️ **Hra na celou obrazovku** (tlačítko / klávesa **F**), široká plastická trať
+- 🖥️ **Hra na celou obrazovku** (tlačítko / klávesa **F**)
+- 🕶️ **3/4 perspektiva (~75°)** jako originál — vyvýšené 3D mantinely, plastický terén
 - 🧪 **Propracovaná fyzika** — vektor rychlosti, přilnavost a smyk (drift)
 - 🟥 **Terén ve stylu originálu** — červeno-bílé mantinely, blátivé a vodní louže
 - 🎁 **Balíčky odměn** na trati — nitro, peníze, pneumatiky (grip), zrychlení
-- 🔥 Nitro turbo, vzájemné narážení aut
+- 💨 **Efekty** — jiskry nitra, šplouchání bláta/vody, prach za koly
+- 🔥 **Nitro jako zásoba** — sbírej ho a vypusť klávesou, kdy se ti hodí
 
 ## ▶️ Spuštění
 
@@ -52,7 +54,7 @@ PORT=8080 node server/server.js
 | Plyn            | **W**            | **↑**          |
 | Brzda/zpátečka  | **S**            | **↓**          |
 | Zatáčení        | **A / D**        | **← / →**      |
-| Nitro           | **Levý Shift**   | **Pravý Shift**|
+| Nitro (vypustit) | **Levý Shift**  | **Pravý Shift**|
 
 **Online hra (na svém zařízení):** ovládej buď **WASD + Levý Shift**,
 nebo **šipky + Pravý Shift** — obě sady řídí tvé auto.
