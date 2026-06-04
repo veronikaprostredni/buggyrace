@@ -107,6 +107,46 @@ h1 span {
   color: #fff;
 }
 
+.section-title {
+  margin: 6px 0 8px;
+  font-size: 14px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: #9fb0a3;
+}
+.track-select {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.track-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 120px;
+  padding: 10px 12px;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: #e7ede7;
+  background: rgba(255, 255, 255, 0.05);
+  border: 2px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  box-shadow: none;
+  cursor: pointer;
+}
+.track-btn:active { transform: none; }
+.track-btn.active {
+  border-color: var(--accent);
+  background: rgba(246, 197, 68, 0.14);
+  color: #fff;
+}
+.track-btn .t-name { font-size: 14px; }
+.track-btn .t-diff { font-size: 11px; color: #9fb0a3; font-weight: 400; }
+
 .laps-note { color: #d7ddd6; margin: 10px 0 18px; }
 
 button {
