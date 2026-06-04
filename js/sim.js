@@ -113,7 +113,7 @@
         bx: p.x + nx * gateLineHalf, by: p.y + ny * gateLineHalf,
       });
     }
-    return { def, center, gates, halfW, width: def.width, gateCount: GATE_COUNT, theme: def.theme };
+    return { def, center, gates, halfW, width: def.width, gateCount: GATE_COUNT, theme: def.theme, terrain: def.terrain || [] };
   }
 
   function isOnTrack(track, x, y) {
@@ -128,6 +128,23 @@
     return best <= half;
   }
 
+  /* ---------------- Terén ---------------- */
+  const NEUTRAL = { speed: 1, grip: 1, rough: false };
+  const TERRAIN_FX = {
+    mud: { speed: 0.62, grip: 0.78, rough: true },     // bláto: pomalé a kluzké
+    water: { speed: 0.48, grip: 0.55, rough: true },   // louže: hodně zpomalí
+    bumps: { speed: 0.85, grip: 0.92, rough: true },   // hrboly: drncání
+  };
+  // Vliv povrchu v daném bodě (terénní plochy trati).
+  function surfaceAt(track, x, y) {
+    const T = track.terrain;
+    if (T) for (const z of T) {
+      const dx = x - z.x, dy = y - z.y;
+      if (dx * dx + dy * dy < z.r * z.r) return TERRAIN_FX[z.type] || NEUTRAL;
+    }
+    return NEUTRAL;
+  }
+
   /* ---------------- Vylepšení (shop) ---------------- */
   const UPGRADE_DEFS = {
     engine: { name: "Motor", max: 3, cost: [0, 400, 800, 1400], desc: "vyšší maximální rychlost" },
@@ -137,8 +154,10 @@
   };
 
   const BASE = {
-    accel: 0.16, reverseAccel: 0.12, maxSpeed: 4.3, offMaxSpeed: 1.7,
-    friction: 0.965, offFriction: 0.90, turn: 0.052, nitroMaxSpeed: 4.7, nitroBoost: 0.22,
+    accel: 0.17, reverseAccel: 0.11, maxSpeed: 4.3, offMaxSpeed: 1.9,
+    friction: 0.985, offFriction: 0.90,    // dopředné valivé tření
+    grip: 0.17, offGrip: 0.09,             // ubírání bočního skluzu (víc = méně smyku)
+    turn: 0.060, nitroMaxSpeed: 5.2, nitroBoost: 0.26,
   };
 
   function computePhys(up) {
@@ -151,8 +170,10 @@
       offMaxSpeed: BASE.offMaxSpeed + e * 0.12,
       friction: BASE.friction,
       offFriction: BASE.offFriction,
-      turn: BASE.turn + t * 0.007,
-      nitroMaxSpeed: BASE.nitroMaxSpeed + e * 0.55 + 0.3,
+      grip: BASE.grip + t * 0.045,
+      offGrip: BASE.offGrip + t * 0.02,
+      turn: BASE.turn + t * 0.006,
+      nitroMaxSpeed: BASE.nitroMaxSpeed + e * 0.55,
       nitroBoost: BASE.nitroBoost + n * 0.03,
       nitroTank: 100 + n * 45,
       nitroDrain: 0.8 - n * 0.08,
@@ -173,6 +194,8 @@
       this.upgrades = opts.upgrades || { engine: 0, accel: 0, tires: 0, nitro: 0 };
       this.phys = computePhys(this.upgrades);
       this.x = 0; this.y = 0; this.angle = 0; this.speed = 0;
+      this.vx = 0; this.vy = 0;          // vektor rychlosti
+      this.boostTime = 0; this.gripTime = 0;   // dočasné bonusy z balíčků
       this.prevX = 0; this.prevY = 0;
       this.lapGates = 0;       // celkový počet projetých branek
       this.nextGate = 1;
@@ -196,6 +219,8 @@
       this.y = this.prevY = y;
       this.angle = angle;
       this.speed = 0;
+      this.vx = 0; this.vy = 0;
+      this.boostTime = 0; this.gripTime = 0;
       this.lapGates = 0;
       this.nextGate = 1;
       this.nitro = this.phys.nitroTank;
@@ -250,49 +275,73 @@
   /* ---------------- Krok fyziky jednoho auta ---------------- */
   function stepCar(car, track, input) {
     if (car.finished) {
-      car.speed *= 0.9;
-      car.x += Math.cos(car.angle) * car.speed;
-      car.y += Math.sin(car.angle) * car.speed;
+      car.vx *= 0.9; car.vy *= 0.9;
+      car.x += car.vx; car.y += car.vy;
+      car.speed = Math.hypot(car.vx, car.vy);
       return;
     }
     const P = car.phys;
     const onTrack = isOnTrack(track, car.x, car.y);
+    const surf = surfaceAt(track, car.x, car.y);   // vliv terénu (bláto/voda)
+
+    // dočasné bonusy z balíčků
+    car.boostTime = Math.max(0, car.boostTime - FIXED_DT);
+    car.gripTime = Math.max(0, car.gripTime - FIXED_DT);
+    const speedMul = car.boostTime > 0 ? 1.35 : 1;
+    const gripMul = car.gripTime > 0 ? 1.4 : 1;
 
     const usingNitro = input.nitro && car.nitro > 0 && input.up;
-    car.boosting = usingNitro;
-    let maxSpeed = onTrack ? P.maxSpeed : P.offMaxSpeed;
+    car.boosting = usingNitro || car.boostTime > 0;
+    let maxSpeed = (onTrack ? P.maxSpeed : P.offMaxSpeed) * speedMul * surf.speed;
     let accel = P.accel;
     if (usingNitro) {
-      maxSpeed = P.nitroMaxSpeed;
+      maxSpeed = P.nitroMaxSpeed * speedMul * surf.speed;
       accel += P.nitroBoost;
       car.nitro = Math.max(0, car.nitro - P.nitroDrain);
     } else {
       car.nitro = Math.min(P.nitroTank, car.nitro + P.nitroRegen);
     }
 
-    if (input.up) car.speed += accel;
-    if (input.down) car.speed -= P.reverseAccel;
+    const a = car.angle, cosA = Math.cos(a), sinA = Math.sin(a);
+    // motor působí podél směru auta
+    if (input.up) { car.vx += cosA * accel; car.vy += sinA * accel; }
+    if (input.down) { car.vx -= cosA * P.reverseAccel; car.vy -= sinA * P.reverseAccel; }
 
-    car.speed *= onTrack ? P.friction : P.offFriction;
-    if (car.speed > maxSpeed) car.speed = maxSpeed;
-    if (car.speed < -P.offMaxSpeed) car.speed = -P.offMaxSpeed;
+    // řízení (účinnější při vyšší rychlosti; podle směru jízdy)
+    const sp = Math.hypot(car.vx, car.vy);
+    const fwdSign = (car.vx * cosA + car.vy * sinA) >= 0 ? 1 : -1;
+    const steerFactor = Math.min(1, sp / 1.4);
+    if (input.left) car.angle -= P.turn * steerFactor * fwdSign;
+    if (input.right) car.angle += P.turn * steerFactor * fwdSign;
 
-    const steerFactor = Math.min(1, Math.abs(car.speed) / 1.5);
-    const dir = car.speed >= 0 ? 1 : -1;
-    if (input.left) car.angle -= P.turn * steerFactor * dir;
-    if (input.right) car.angle += P.turn * steerFactor * dir;
+    // rozklad rychlosti na podélnou a boční složku vůči novému směru
+    const a2 = car.angle, c2 = Math.cos(a2), s2 = Math.sin(a2);
+    let fwd = car.vx * c2 + car.vy * s2;
+    let lat = -car.vx * s2 + car.vy * c2;
 
-    car.rumble = (!onTrack && Math.abs(car.speed) > 0.5) ? (Math.random() - 0.5) * 1.6 : 0;
+    fwd *= (onTrack ? P.friction : P.offFriction);
+    let grip = (onTrack ? P.grip : P.offGrip) * gripMul * surf.grip;
+    if (grip > 0.92) grip = 0.92;
+    lat *= (1 - grip);                  // přilnavost ubírá boční skluz (drift)
 
+    if (fwd > maxSpeed) fwd = maxSpeed;
+    if (fwd < -P.offMaxSpeed) fwd = -P.offMaxSpeed;
+
+    car.vx = c2 * fwd - s2 * lat;
+    car.vy = s2 * fwd + c2 * lat;
+    car.speed = fwd;
+
+    const rough = !onTrack || surf.rough;
+    car.rumble = (rough && sp > 0.5) ? (Math.random() - 0.5) * 1.6 : 0;
     car.prevX = car.x; car.prevY = car.y;
-    car.x += Math.cos(car.angle) * car.speed + car.rumble;
-    car.y += Math.sin(car.angle) * car.speed + car.rumble;
+    car.x += car.vx + car.rumble;
+    car.y += car.vy + car.rumble;
 
     const m = 16;
-    if (car.x < m) { car.x = m; car.speed *= 0.4; }
-    if (car.x > WORLD_W - m) { car.x = WORLD_W - m; car.speed *= 0.4; }
-    if (car.y < m) { car.y = m; car.speed *= 0.4; }
-    if (car.y > WORLD_H - m) { car.y = WORLD_H - m; car.speed *= 0.4; }
+    if (car.x < m) { car.x = m; car.vx *= -0.3; car.vy *= 0.8; }
+    if (car.x > WORLD_W - m) { car.x = WORLD_W - m; car.vx *= -0.3; car.vy *= 0.8; }
+    if (car.y < m) { car.y = m; car.vy *= -0.3; car.vx *= 0.8; }
+    if (car.y > WORLD_H - m) { car.y = WORLD_H - m; car.vy *= -0.3; car.vx *= 0.8; }
   }
 
   // Kontrola průjezdu brankou (protnutí čáry pohybem auta)
@@ -372,7 +421,11 @@
             const ux = dx / d, uy = dy / d;
             a.x -= ux * ovr; a.y -= uy * ovr;
             b.x += ux * ovr; b.y += uy * ovr;
-            a.speed *= 0.85; b.speed *= 0.85;
+            // předání části hybnosti + odraz
+            const push = 0.6;
+            a.vx -= ux * push; a.vy -= uy * push;
+            b.vx += ux * push; b.vy += uy * push;
+            a.vx *= 0.9; a.vy *= 0.9; b.vx *= 0.9; b.vy *= 0.9;
             a.collided = b.collided = true;
             events.push({ type: "collision", a: a.id, b: b.id });
           }
