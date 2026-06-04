@@ -123,6 +123,13 @@
     else blip(880, 0.5, "sawtooth", 0.35);   // GO!
   }
 
+  function pickup(kind) {
+    if (!ready()) return;
+    // peníze = mincový dvojtón, ostatní = vzestupné blipnutí
+    if (kind === "money") { blip(988, 0.08, "square", 0.22); setTimeout(() => blip(1319, 0.12, "square", 0.22), 70); }
+    else { blip(660, 0.07, "triangle", 0.22); setTimeout(() => blip(1047, 0.12, "triangle", 0.22), 60); }
+  }
+
   function finishFanfare() {
     if (!ready()) return;
     const notes = [523, 659, 784, 1047];
@@ -140,7 +147,7 @@
 
   global.Sound = {
     init, ready, updateEngine, stopEngine, stopAllEngines,
-    setNitro, collision, countdownTick, finishFanfare,
+    setNitro, collision, countdownTick, finishFanfare, pickup,
     setMuted, toggleMute, isMuted,
   };
 })(typeof window !== "undefined" ? window : globalThis);

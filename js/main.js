@@ -172,7 +172,7 @@
   function awardChampionship(ranked) {
     ranked.forEach((c, i) => {
       const p = champ.players[c.id];
-      if (p) p.money += PAYOUT[i] != null ? PAYOUT[i] : 60;
+      if (p) p.money += (PAYOUT[i] != null ? PAYOUT[i] : 60) + (c.cashBonus || 0);  // umístění + sebrané peníze
     });
     champ.wins[ranked[0].id] = (champ.wins[ranked[0].id] || 0) + 1;
   }
@@ -383,6 +383,7 @@
         const events = world.tick(inputs);
         for (const ev of events) {
           if (ev.type === "collision") collided = true;
+          if (ev.type === "pickup") Sound.pickup(ev.kind);
           if (ev.type === "finish" && !finishPlayed) { Sound.finishFanfare(); finishPlayed = true; }
         }
         acc -= FIXED_DT;
@@ -438,13 +439,94 @@
     const w = track.width;
     // plastický, vyvýšený profil trati: stín -> krajnice -> tmavé okraje -> světlý střed
     strokePath(track.center, w + 30, "rgba(0,0,0,0.22)");          // měkký stín pod tratí
-    strokePath(track.center, w + 16, shade(th.dirtEdge, 1.3));     // vyvýšená krajnice (lip)
-    strokePath(track.center, w + 6, shade(th.dirtEdge, 0.8));      // rýha za krajnicí
-    strokePath(track.center, w, shade(th.dirt, 0.7));              // tmavý okraj cesty
+    strokePath(track.center, w + 6, shade(th.dirt, 0.6));          // tmavý okraj cesty
+    strokePath(track.center, w, shade(th.dirt, 0.78));
     strokePath(track.center, w - 18, th.dirt);                     // hlína
     strokePath(track.center, w - 44, shade(th.dirt, 1.16));        // nasvícený vyvýšený střed
     strokePath(track.center, Math.max(6, w - 82), shade(th.rut, 1.22)); // světlý hřbet
+    drawTerrain(track);                                            // bláto / louže
     drawStartLine(track);
+    drawBarriers(track);                                           // červeno-bílé mantinely
+  }
+
+  // bod posunutý kolmo k trati o vzdálenost d
+  function offsetPath(center, d) {
+    const n = center.length, out = [];
+    for (let i = 0; i < n; i++) {
+      const p = center[i], q = center[(i + 1) % n];
+      const dx = q.x - p.x, dy = q.y - p.y;
+      const len = Math.hypot(dx, dy) || 1;
+      out.push({ x: p.x + (-dy / len) * d, y: p.y + (dx / len) * d });
+    }
+    return out;
+  }
+  function strokePoly(pts, width, color, dash) {
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.lineJoin = "round"; ctx.lineCap = "butt";
+    if (dash) ctx.setLineDash(dash); else ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.closePath();
+    ctx.stroke();
+    ctx.restore();
+  }
+  function drawBarriers(track) {
+    const off = track.width / 2 + 7;
+    for (const side of [off, -off]) {
+      const edge = offsetPath(track.center, side);
+      strokePoly(edge, 11, "rgba(0,0,0,0.3)", null);     // stín mantinelu
+      strokePoly(edge, 9, "#e9e9e9", null);              // bílý základ
+      strokePoly(edge, 9, "#d4322a", [22, 22]);          // červené pruhy
+    }
+  }
+  function drawTerrain(track) {
+    for (const z of track.terrain) {
+      const water = z.type === "water";
+      ctx.save();
+      ctx.beginPath(); ctx.arc(z.x, z.y, z.r, 0, Math.PI * 2);
+      ctx.fillStyle = water ? "rgba(40,90,120,0.78)" : "rgba(60,42,22,0.82)";
+      ctx.fill();
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = water ? "rgba(120,170,200,0.7)" : "rgba(30,20,10,0.6)";
+      ctx.stroke();
+      // odlesk / textura
+      ctx.beginPath(); ctx.arc(z.x - z.r * 0.3, z.y - z.r * 0.3, z.r * 0.35, 0, Math.PI * 2);
+      ctx.fillStyle = water ? "rgba(180,220,240,0.25)" : "rgba(110,80,45,0.4)";
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  // balíčky odměn na trati
+  const PICKUP_STYLE = {
+    nitro: { c: "#3bb0ff", t: "🔥", label: "N" },
+    money: { c: "#f6c544", t: "$", label: "$" },
+    tires: { c: "#222", t: "◎", label: "T" },
+    accel: { c: "#34c759", t: "⚡", label: "»" },
+  };
+  function drawPickups(list) {
+    if (!list) return;
+    const pulse = 1 + Math.sin(Date.now() / 200) * 0.08;
+    for (const p of list) {
+      if (p.active === false) continue;
+      const st = PICKUP_STYLE[p.type] || PICKUP_STYLE.money;
+      const r = 13 * pulse;
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.fillStyle = "rgba(0,0,0,0.3)";
+      ctx.beginPath(); ctx.arc(0, 3, r, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = st.c;
+      ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
+      ctx.lineWidth = 2.5; ctx.strokeStyle = "rgba(255,255,255,0.85)"; ctx.stroke();
+      ctx.fillStyle = p.type === "nitro" || p.type === "tires" ? "#fff" : "#1a1205";
+      ctx.font = "bold 15px 'Segoe UI', sans-serif";
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText(st.label, 0, 1);
+      ctx.restore();
+    }
   }
   function strokePath(center, width, color) {
     ctx.strokeStyle = color;
@@ -590,6 +672,7 @@
       return;
     }
     drawTrack(world.track);
+    drawPickups(world.pickups);
     for (const c of world.cars) drawCar(c);
     drawHUD();
     if (state === STATE.COUNTDOWN) drawCountdown(countdown);
@@ -602,7 +685,7 @@
   let inOnline = false;            // je otevřené online překrytí?
   const netGame = {
     active: false, track: null, laps: 3, gateCount: IMR.GATE_COUNT,
-    meta: {}, cars: {}, disp: {}, phase: "countdown", time: 0, countdown: 0,
+    meta: {}, cars: {}, disp: {}, pickups: [], phase: "countdown", time: 0, countdown: 0,
     lastInputStr: "", lastCountInt: 4, lobby: null,
   };
 
@@ -661,7 +744,7 @@
     netGame.laps = m.laps;
     netGame.meta = {};
     for (const c of m.cars) netGame.meta[c.id] = { name: c.name, color: c.color, isAI: c.isAI };
-    netGame.cars = {}; netGame.disp = {};
+    netGame.cars = {}; netGame.disp = {}; netGame.pickups = [];
     netGame.phase = "countdown";
     netGame.countdown = 3.999;
     netGame.lastCountInt = 4;
@@ -676,6 +759,7 @@
     netGame.phase = m.phase;
     netGame.time = m.time;
     netGame.countdown = m.countdown;
+    netGame.pickups = m.pickups || [];
     for (const c of m.cars) {
       netGame.cars[c.id] = c;
       if (!netGame.disp[c.id]) netGame.disp[c.id] = { x: c.x, y: c.y, a: c.a };
@@ -763,6 +847,7 @@
 
   function renderOnline() {
     drawTrack(netGame.track);
+    drawPickups(netGame.pickups);
     const k = 0.35;
     for (const id in netGame.cars) {
       const t = netGame.cars[id];

@@ -24,6 +24,11 @@
         { x: 200, y: 150 }, { x: 470, y: 110 }, { x: 760, y: 140 }, { x: 880, y: 300 },
         { x: 820, y: 470 }, { x: 600, y: 470 }, { x: 470, y: 560 }, { x: 250, y: 540 }, { x: 110, y: 360 },
       ],
+      terrainSpec: [
+        { gate: 5, side: 0.55, type: "mud", r: 34 },
+        { gate: 14, side: -0.45, type: "water", r: 30 },
+        { gate: 20, side: 0.4, type: "mud", r: 32 },
+      ],
     },
     {
       id: "canyon",
@@ -34,6 +39,12 @@
       waypoints: [
         { x: 150, y: 230 }, { x: 330, y: 130 }, { x: 520, y: 210 }, { x: 700, y: 120 }, { x: 880, y: 250 },
         { x: 800, y: 430 }, { x: 870, y: 560 }, { x: 640, y: 600 }, { x: 470, y: 500 }, { x: 280, y: 590 }, { x: 110, y: 430 },
+      ],
+      terrainSpec: [
+        { gate: 4, side: -0.45, type: "mud", r: 30 },
+        { gate: 9, side: 0.5, type: "water", r: 30 },
+        { gate: 13, side: -0.4, type: "mud", r: 32 },
+        { gate: 19, side: 0.45, type: "mud", r: 30 },
       ],
     },
     {
@@ -46,6 +57,10 @@
         { x: 200, y: 150 }, { x: 500, y: 120 }, { x: 800, y: 150 }, { x: 890, y: 340 },
         { x: 800, y: 540 }, { x: 500, y: 570 }, { x: 200, y: 540 }, { x: 110, y: 340 },
       ],
+      terrainSpec: [
+        { gate: 11, side: 0.5, type: "mud", r: 34 },
+        { gate: 22, side: -0.4, type: "water", r: 28 },
+      ],
     },
     {
       id: "stadium",
@@ -56,6 +71,10 @@
       waypoints: [
         { x: 200, y: 160 }, { x: 500, y: 120 }, { x: 800, y: 160 }, { x: 880, y: 340 },
         { x: 800, y: 540 }, { x: 500, y: 580 }, { x: 200, y: 540 }, { x: 120, y: 340 },
+      ],
+      terrainSpec: [
+        { gate: 7, side: -0.5, type: "mud", r: 32 },
+        { gate: 17, side: 0.45, type: "water", r: 28 },
       ],
     },
   ];
@@ -113,7 +132,16 @@
         bx: p.x + nx * gateLineHalf, by: p.y + ny * gateLineHalf,
       });
     }
-    return { def, center, gates, halfW, width: def.width, gateCount: GATE_COUNT, theme: def.theme, terrain: def.terrain || [] };
+    // terénní plochy z předpisu vázaného na branky (zaručeně u trati)
+    let terrain = def.terrain || [];
+    if (def.terrainSpec) {
+      terrain = def.terrainSpec.map((s) => {
+        const g = gates[s.gate % gates.length];
+        const nx = -Math.sin(g.dirAngle), ny = Math.cos(g.dirAngle);
+        return { type: s.type, r: s.r, x: g.x + nx * s.side * halfW, y: g.y + ny * s.side * halfW };
+      });
+    }
+    return { def, center, gates, halfW, width: def.width, gateCount: GATE_COUNT, theme: def.theme, terrain };
   }
 
   function isOnTrack(track, x, y) {
@@ -196,6 +224,7 @@
       this.x = 0; this.y = 0; this.angle = 0; this.speed = 0;
       this.vx = 0; this.vy = 0;          // vektor rychlosti
       this.boostTime = 0; this.gripTime = 0;   // dočasné bonusy z balíčků
+      this.cashBonus = 0;                       // peníze sebrané na trati
       this.prevX = 0; this.prevY = 0;
       this.lapGates = 0;       // celkový počet projetých branek
       this.nextGate = 1;
@@ -221,6 +250,7 @@
       this.speed = 0;
       this.vx = 0; this.vy = 0;
       this.boostTime = 0; this.gripTime = 0;
+      this.cashBonus = 0;
       this.lapGates = 0;
       this.nextGate = 1;
       this.nitro = this.phys.nitroTank;
@@ -368,6 +398,20 @@
       this.time = 0;
       this.running = false;
       this.placeCars();
+      this.initPickups();
+    }
+
+    // odměny na trati: nitro, peníze, pneumatiky (grip), zrychlení
+    initPickups() {
+      const types = ["nitro", "money", "accel", "nitro", "tires", "money", "nitro", "accel"];
+      const gateIdx = [3, 6, 9, 12, 15, 18, 21, 23];
+      const gates = this.track.gates;
+      this.pickups = gateIdx.map((gi, k) => {
+        const g = gates[gi % gates.length];
+        const nx = -Math.sin(g.dirAngle), ny = Math.cos(g.dirAngle);
+        const side = (k % 2 === 0 ? 1 : -1) * (this.track.halfW * 0.4);
+        return { id: k, type: types[k % types.length], x: g.x + nx * side, y: g.y + ny * side, active: true, respawn: 0 };
+      });
     }
 
     placeCars() {
@@ -395,6 +439,7 @@
         stepCar(c, this.track, input);
       }
       this.resolveCollisions(events);
+      this.updatePickups(events);
       for (const c of this.cars) {
         const wasFinished = c.finished;
         if (checkGate(c, this.track, this.totalLaps)) {
@@ -406,6 +451,37 @@
         }
       }
       return events;
+    }
+
+    updatePickups(events) {
+      const R = 24;
+      for (const p of this.pickups) {
+        if (!p.active) {
+          p.respawn -= FIXED_DT;
+          if (p.respawn <= 0) p.active = true;
+          continue;
+        }
+        for (const c of this.cars) {
+          if (c.finished) continue;
+          const dx = c.x - p.x, dy = c.y - p.y;
+          if (dx * dx + dy * dy < R * R) {
+            this.applyPickup(c, p);
+            p.active = false;
+            p.respawn = 7;
+            events.push({ type: "pickup", car: c.id, kind: p.type });
+            break;
+          }
+        }
+      }
+    }
+
+    applyPickup(car, p) {
+      switch (p.type) {
+        case "nitro": car.nitro = Math.min(car.phys.nitroTank, car.nitro + 60); break;
+        case "accel": car.boostTime = 3.0; break;       // dočasné zrychlení
+        case "tires": car.gripTime = 4.5; break;        // dočasná lepší přilnavost
+        case "money": car.cashBonus = (car.cashBonus || 0) + 150; break;  // sebráno -> přičte se mimo
+      }
     }
 
     resolveCollisions(events) {

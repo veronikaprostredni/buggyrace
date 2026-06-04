@@ -176,6 +176,7 @@ function statePayload(room) {
       lg: c.lapGates, ng: c.nextGate, f: c.finished ? 1 : 0,
       n: Math.round(c.nitro), nt: Math.round(c.phys.nitroTank),
     })),
+    pickups: w.pickups.filter((p) => p.active).map((p) => ({ id: p.id, type: p.type, x: p.x, y: p.y })),
   };
 }
 
