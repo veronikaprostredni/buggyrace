@@ -43,12 +43,32 @@
     return { up: down(keys.up), down: down(keys.down), left: down(keys.left), right: down(keys.right), nitro: down(keys.nitro) };
   }
 
-  /* ---------------- Sestavení aut (lokální hra 2 hráčů) ---------------- */
-  function makeLocalCars() {
-    return [
-      new IMR.Car({ id: "p1", color: "#e8473b", name: "Hráč 1" }),
-      new IMR.Car({ id: "p2", color: "#3b82e8", name: "Hráč 2" }),
-    ];
+  /* ---------------- Konfigurace závodu ---------------- */
+  let humanCount = 2;
+  let aiCount = 0;
+  let aiDifficulty = "normal";
+  const AI_SKILL = { easy: 0.62, normal: 0.82, hard: 0.96 };
+  const AI_COLORS = ["#f59e0b", "#34c759", "#a855f7", "#22d3ee"];
+  const AI_NAMES = ["CPU Rudák", "CPU Bleskoun", "CPU Drtič", "CPU Liška"];
+
+  const HUMAN_CONTROLLERS = [
+    { id: "p1", keys: P1_KEYS, color: "#e8473b", name: "Hráč 1" },
+    { id: "p2", keys: P2_KEYS, color: "#3b82e8", name: "Hráč 2" },
+  ];
+
+  function activeControllers() { return HUMAN_CONTROLLERS.slice(0, humanCount); }
+
+  /* ---------------- Sestavení aut ---------------- */
+  function makeCars() {
+    const cars = activeControllers().map((ctrl) =>
+      new IMR.Car({ id: ctrl.id, color: ctrl.color, name: ctrl.name }));
+    for (let i = 0; i < aiCount; i++) {
+      cars.push(new IMR.Car({
+        id: "ai" + i, color: AI_COLORS[i % AI_COLORS.length], name: AI_NAMES[i % AI_NAMES.length],
+        isAI: true, aiSkill: AI_SKILL[aiDifficulty],
+      }));
+    }
+    return cars;
   }
 
   /* ---------------- Stavy ---------------- */
@@ -69,7 +89,7 @@
 
   function startRace() {
     Sound.init();
-    world = new IMR.World(IMR.TRACKS[selectedTrack], makeLocalCars(), TOTAL_LAPS);
+    world = new IMR.World(IMR.TRACKS[selectedTrack], makeCars(), TOTAL_LAPS);
     world.running = false;
     countdown = 3.999;
     lastCountInt = 4;
@@ -117,6 +137,35 @@
     });
   }
 
+  /* ---------------- Generátor přepínačů voleb ---------------- */
+  function buildOptionGroup(containerId, options, getVal, setVal) {
+    const wrap = document.getElementById(containerId);
+    if (!wrap) return;
+    wrap.innerHTML = "";
+    options.forEach((opt) => {
+      const btn = document.createElement("button");
+      btn.className = "opt-btn" + (opt.value === getVal() ? " active" : "");
+      btn.textContent = opt.label;
+      btn.addEventListener("click", () => {
+        setVal(opt.value);
+        [...wrap.children].forEach((c, k) => c.classList.toggle("active", options[k].value === getVal()));
+      });
+      wrap.appendChild(btn);
+    });
+  }
+
+  function buildOptionUI() {
+    buildOptionGroup("humanSelect",
+      [{ label: "1", value: 1 }, { label: "2", value: 2 }],
+      () => humanCount, (v) => { humanCount = v; });
+    buildOptionGroup("aiSelect",
+      [0, 1, 2, 3, 4].map((n) => ({ label: String(n), value: n })),
+      () => aiCount, (v) => { aiCount = v; });
+    buildOptionGroup("aiDiffSelect",
+      [{ label: "Snadní", value: "easy" }, { label: "Normální", value: "normal" }, { label: "Těžcí", value: "hard" }],
+      () => aiDifficulty, (v) => { aiDifficulty = v; });
+  }
+
   document.getElementById("startBtn").addEventListener("click", startRace);
   document.getElementById("againBtn").addEventListener("click", startRace);
   document.getElementById("muteBtn").addEventListener("click", () => {
@@ -135,7 +184,8 @@
       if (countdown <= 0) state = STATE.RACE;
     }
     if (state === STATE.RACE || (state === STATE.COUNTDOWN && world.running)) {
-      const inputs = { p1: inputFor(P1_KEYS), p2: inputFor(P2_KEYS) };
+      const inputs = {};
+      for (const ctrl of activeControllers()) inputs[ctrl.id] = inputFor(ctrl.keys);
       acc += dt;
       let guard = 0;
       let collided = false;
@@ -346,5 +396,6 @@
   }
 
   buildTrackSelect();
+  buildOptionUI();
   requestAnimationFrame(loop);
 })();

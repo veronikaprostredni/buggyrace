@@ -166,6 +166,34 @@ h1 span {
 .track-btn .t-name { font-size: 14px; }
 .track-btn .t-diff { font-size: 11px; color: #9fb0a3; font-weight: 400; }
 
+.opt-row {
+  display: flex;
+  gap: 18px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin: 14px 0 4px;
+}
+.opt-col { display: flex; flex-direction: column; align-items: center; }
+.opt-group { display: flex; gap: 6px; }
+.opt-btn {
+  min-width: 40px;
+  padding: 8px 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #e7ede7;
+  background: rgba(255, 255, 255, 0.05);
+  border: 2px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  box-shadow: none;
+  cursor: pointer;
+}
+.opt-btn:active { transform: none; }
+.opt-btn.active {
+  border-color: var(--accent);
+  background: rgba(246, 197, 68, 0.14);
+  color: #fff;
+}
+
 .laps-note { color: #d7ddd6; margin: 10px 0 18px; }
 
 button {
