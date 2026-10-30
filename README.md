@@ -16,10 +16,15 @@ JavaScript, server v Node.js **bez jakýchkoli externích závislostí**.
 - 🔊 **Zvuky** motorů (výška dle rychlosti), nitra, nárazů, odpočtu, sběru a cíle
 - 🖥️ **Hra na celou obrazovku** (tlačítko / klávesa **F**)
 - 🕶️ **3/4 perspektiva (~75°)** jako originál — vyvýšené 3D mantinely, plastický terén
-- 🧪 **Propracovaná fyzika** — vektor rychlosti, přilnavost a smyk (drift)
+- 🎮 **Předvídatelné ovládání jako v originále** — auto jede tam, kam míří (jen mírný
+  smyk), otočí se i na místě, má skutečnou brzdu a stejný vstup dá vždy stejnou jízdu
+- 🧱 **Pevné mantinely** — od zdí se auto odrazí, z trati nevypadne
+- ⛰️ **Plastický terén** — táhlé vlny (do kopce brzdí, z kopce zrychlí), skokánky
+  (v rychlosti auto vyletí a ve vzduchu nezatáčí) a hrboly; hliněná aréna s balvany
 - 🟥 **Terén ve stylu originálu** — červeno-bílé mantinely, blátivé a vodní louže
 - 🎁 **Balíčky odměn** na trati — nitro, peníze, pneumatiky (grip), zrychlení
-- 💨 **Efekty** — jiskry nitra, šplouchání bláta/vody, prach za koly
+- 💨 **Efekty** — jiskry nitra, šplouchání bláta/vody, prach za koly, oblak při dopadu,
+  jiskry a zvuk při nárazu do mantinelu
 - 🔥 **Nitro jako zásoba** — sbírej ho a vypusť klávesou, kdy se ti hodí
 
 ## ▶️ Spuštění
