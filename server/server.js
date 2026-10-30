@@ -173,6 +173,7 @@ function statePayload(room) {
       id: c.id, x: Math.round(c.x * 10) / 10, y: Math.round(c.y * 10) / 10,
       a: Math.round(c.angle * 1000) / 1000, b: c.boosting ? 1 : 0,
       sp: Math.round(c.speed * 100) / 100,
+      z: Math.round(c.z * 10) / 10,
       lg: c.lapGates, ng: c.nextGate, f: c.finished ? 1 : 0,
       n: Math.round(c.nitro), nt: Math.round(c.phys.nitroTank),
     })),
