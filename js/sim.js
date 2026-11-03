@@ -11,7 +11,7 @@
   const WORLD_H = 680;
   const GATE_COUNT = 24;
   const FIXED_DT = 1 / 60;   // pevný krok simulace
-  const CAR_R = 11;          // srážkový poloměr auta
+  const CAR_R = 10;          // srážkový poloměr auta
   const WALL_GAP = 6;        // mantinel stojí kousek za okrajem cesty
   const GRAVITY = 0.42;      // px/tik² pro skoky z kopců
 
@@ -21,7 +21,7 @@
       id: "dusty",
       name: "Prašná smyčka",
       difficulty: "Střední",
-      width: 108,
+      width: 145,
       theme: { grass: "#6b5233", grassDark: "#4f3c25", dirt: "#a5844f", dirtEdge: "#7a6038", rut: "#94754a" },   // hliněná aréna jako v originále
       waypoints: [
         { x: 200, y: 150 }, { x: 470, y: 110 }, { x: 760, y: 140 }, { x: 880, y: 300 },
@@ -38,11 +38,11 @@
       id: "canyon",
       name: "Hadí kaňon",
       difficulty: "Těžká",
-      width: 100,
+      width: 132,
       theme: { grass: "#6b5a3a", grassDark: "#564834", dirt: "#b08a55", dirtEdge: "#8a6c40", rut: "#a07c48" },
       waypoints: [
-        { x: 150, y: 230 }, { x: 330, y: 130 }, { x: 520, y: 210 }, { x: 700, y: 120 }, { x: 880, y: 250 },
-        { x: 800, y: 430 }, { x: 870, y: 560 }, { x: 640, y: 600 }, { x: 470, y: 500 }, { x: 280, y: 590 }, { x: 110, y: 430 },
+        { x: 140, y: 220 }, { x: 330, y: 110 }, { x: 540, y: 200 }, { x: 740, y: 105 }, { x: 900, y: 250 },
+        { x: 860, y: 540 }, { x: 610, y: 580 }, { x: 460, y: 440 }, { x: 300, y: 580 }, { x: 100, y: 470 },
       ],
       terrainSpec: [
         { gate: 4, side: -0.45, type: "mud", r: 30 },
@@ -56,7 +56,7 @@
       id: "oval",
       name: "Velký ovál",
       difficulty: "Snadná",
-      width: 116,
+      width: 160,
       theme: { grass: "#33683f", grassDark: "#234a2c", dirt: "#9a7b48", dirtEdge: "#76603a", rut: "#8a6e40" },
       waypoints: [
         { x: 200, y: 150 }, { x: 500, y: 120 }, { x: 800, y: 150 }, { x: 890, y: 340 },
@@ -72,7 +72,7 @@
       id: "stadium",
       name: "Noční stadion",
       difficulty: "Střední",
-      width: 106,
+      width: 150,
       theme: { grass: "#283042", grassDark: "#1d2433", dirt: "#7c6f55", dirtEdge: "#5d533f", rut: "#6e6249" },
       waypoints: [
         { x: 200, y: 160 }, { x: 500, y: 120 }, { x: 800, y: 160 }, { x: 880, y: 340 },
@@ -253,8 +253,9 @@
     offMaxSpeed: 2.2,
     friction: 0.988, offFriction: 0.95,    // dopředné valivé tření (cesta / tráva)
     grip: 0.36, offGrip: 0.22,             // ubírání bočního skluzu za tik (víc = méně smyku)
-    turn: 0.066,                           // rad/tik při plné rychlosti
-    turnStill: 0.55,                       // podíl otáčivosti v klidu (otočení na místě)
+    turn: 0.046,                           // rad/tik při plné rychlosti (~160 °/s)
+    turnStill: 0.6,                        // podíl otáčivosti v klidu (otočení na místě)
+    steerUp: 0.16, steerBack: 0.3,         // náběh / návrat řízení za tik: ťuknutí = malá korekce
     nitroMaxSpeed: 5.6, nitroBoost: 0.22,
   };
 
@@ -272,8 +273,10 @@
       offFriction: BASE.offFriction,
       grip: BASE.grip + t * 0.05,
       offGrip: BASE.offGrip + t * 0.03,
-      turn: BASE.turn + t * 0.005,
+      turn: BASE.turn + t * 0.004,
       turnStill: BASE.turnStill,
+      steerUp: BASE.steerUp,
+      steerBack: BASE.steerBack,
       nitroMaxSpeed: BASE.nitroMaxSpeed + e * 0.5,
       nitroBoost: BASE.nitroBoost + n * 0.03,
       nitroTank: 100 + n * 45,
@@ -314,6 +317,7 @@
       this.gz = 0;                       // výška terénu pod autem
       this.air = false;                  // ve vzduchu
       this.slope = 0;                    // sklon terénu ve směru jízdy
+      this.steer = 0;                    // plynulá poloha řízení -1..1
       this.onTrack = true;
       this.rough = false;                // drncavý povrch (jen pro efekty)
       this.boostTime = 0; this.gripTime = 0;   // dočasné bonusy z balíčků
@@ -395,13 +399,14 @@
       car.vx += cosA * a; car.vy += sinA * a;
     }
 
-    // 2) řízení: stálá otáčivost, i v klidu (otočení na místě), obráceně při couvání
-    if (grounded) {
-      const steer = (input.right ? 1 : 0) - (input.left ? 1 : 0);
-      if (steer) {
-        const k = P.turnStill + (1 - P.turnStill) * Math.min(1, Math.abs(fwd0) / 2);
-        car.angle += steer * P.turn * k * (fwd0 < -0.1 ? -1 : 1);
-      }
+    // 2) řízení: plynulý náběh (ťuknutí = malá korekce, podržení = plné zatáčení),
+    //    otáčení i v klidu, obráceně při couvání
+    const want = (input.right ? 1 : 0) - (input.left ? 1 : 0);
+    if (want) car.steer = Math.max(-1, Math.min(1, car.steer + want * P.steerUp * (car.steer * want < 0 ? 2 : 1)));
+    else car.steer = Math.abs(car.steer) <= P.steerBack ? 0 : car.steer - Math.sign(car.steer) * P.steerBack;
+    if (grounded && car.steer) {
+      const k = P.turnStill + (1 - P.turnStill) * Math.min(1, Math.abs(fwd0) / 2);
+      car.angle += car.steer * P.turn * k * (fwd0 < -0.1 ? -1 : 1);
     }
 
     // 3) rozklad rychlosti vůči NOVÉMU směru: auto nese setrvačnost, přilnavost tlumí skluz
@@ -441,9 +446,16 @@
       car.x -= near.nx * over; car.y -= near.ny * over;
       const vn = car.vx * near.nx + car.vy * near.ny;      // rychlost do stěny
       if (vn > 0) {
-        car.vx -= 1.35 * vn * near.nx; car.vy -= 1.35 * vn * near.ny;   // odraz 35 %
-        car.vx *= 0.94; car.vy *= 0.94;                                  // tření o stěnu
+        car.vx -= 1.15 * vn * near.nx; car.vy -= 1.15 * vn * near.ny;   // měkký odraz 15 %
+        car.vx *= 0.97; car.vy *= 0.97;                                  // tření o stěnu
         car.wallHit = vn;
+        // při šikmém nárazu se auto stočí podél stěny (sklouzne), místo aby se zaseklo
+        const tx = -near.ny, ty = near.nx;
+        const fx = Math.cos(car.angle), fy = Math.sin(car.angle);
+        const along = fx * tx + fy * ty;
+        const tAng = Math.atan2(along >= 0 ? ty : -ty, along >= 0 ? tx : -tx);
+        let dA = tAng - car.angle; while (dA > Math.PI) dA -= 2 * Math.PI; while (dA < -Math.PI) dA += 2 * Math.PI;
+        if (Math.abs(dA) < 0.9) car.angle += dA * 0.25;
       }
       near.d = track.wallR;
     }
