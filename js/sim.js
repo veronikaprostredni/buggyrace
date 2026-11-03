@@ -447,15 +447,18 @@
       const vn = car.vx * near.nx + car.vy * near.ny;      // rychlost do stěny
       if (vn > 0) {
         car.vx -= 1.15 * vn * near.nx; car.vy -= 1.15 * vn * near.ny;   // měkký odraz 15 %
-        car.vx *= 0.97; car.vy *= 0.97;                                  // tření o stěnu
+        // odírání o stěnu: ztráta rychlosti podle síly nárazu (letmý dotyk stojí málo)
+        const k = Math.max(0.5, 0.96 - 0.12 * vn);
+        car.vx *= k; car.vy *= k;
         car.wallHit = vn;
-        // při šikmém nárazu se auto stočí podél stěny (sklouzne), místo aby se zaseklo
+        // jen při velmi šikmém dotyku se auto lehce srovná podél stěny, ať se nezasekne
+        // čumákem; auto ale samo trať neobjede – zatáčet musí hráč
         const tx = -near.ny, ty = near.nx;
         const fx = Math.cos(car.angle), fy = Math.sin(car.angle);
         const along = fx * tx + fy * ty;
         const tAng = Math.atan2(along >= 0 ? ty : -ty, along >= 0 ? tx : -tx);
         let dA = tAng - car.angle; while (dA > Math.PI) dA -= 2 * Math.PI; while (dA < -Math.PI) dA += 2 * Math.PI;
-        if (Math.abs(dA) < 0.9) car.angle += dA * 0.25;
+        if (Math.abs(dA) < 0.3) car.angle += dA * 0.1;
       }
       near.d = track.wallR;
     }
