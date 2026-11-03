@@ -8,6 +8,7 @@
 </head>
 <body>
   <div id="stage">
+    <canvas id="view3d"></canvas>
     <canvas id="game" width="1000" height="680"></canvas>
     <button id="muteBtn" class="mute-btn" title="Ztlumit / zapnout zvuk (M)">🔊</button>
     <button id="fsBtn" class="mute-btn fs-btn" title="Celá obrazovka (F)">⛶</button>
@@ -138,5 +139,7 @@
   <script src="js/audio.js"></script>
   <script src="js/net.js"></script>
   <script src="js/main.js"></script>
+  <!-- 3D vykreslování (WebGL); bez něj hra použije 2D -->
+  <script type="module" src="js/render3d.js"></script>
 </body>
 </html>

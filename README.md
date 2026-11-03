@@ -2,8 +2,8 @@
 
 Moderní webová verze klasické offroad závodní hry z DOSu. Pohled shora,
 arkádová fyzika, **dva hráči na jedné klávesnici** i **skutečný síťový
-multiplayer** (každý hráč na svém zařízení). Čistý HTML5 Canvas +
-JavaScript, server v Node.js **bez jakýchkoli externích závislostí**.
+multiplayer** (každý hráč na svém zařízení). 3D grafika ve WebGL (three.js,
+přibalená v repozitáři), server v Node.js **bez jakýchkoli externích závislostí**.
 
 ## ✨ Co hra umí
 
@@ -13,9 +13,12 @@ JavaScript, server v Node.js **bez jakýchkoli externích závislostí**.
 - 🛣️ **4 tratě** s vlastní geometrií a barevným motivem
 - 🏆 **Šampionát** — série 5 závodů s **nakupováním vylepšení** mezi koly
   (motor, zrychlení, pneumatiky, nitro) za vyhrané peníze, jako v originále
-- 🔊 **Zvuky** motorů (výška dle rychlosti), nitra, nárazů, odpočtu, sběru a cíle
+- 🔊 **Přirozený zvuk** — motor buginy ze zápalů válců s řazením, zátěží pod plynem
+  a prskáním výfuku; štěrk pod koly, smyk, nitro, nárazy, diváci, startovní semafor
 - 🖥️ **Hra na celou obrazovku** (tlačítko / klávesa **F**)
-- 🕶️ **3/4 perspektiva (~75°)** jako originál — vyvýšené 3D mantinely, plastický terén
+- 🕶️ **3D grafika ve 3/4 pohledu** jako originál — skutečné stíny, terén s kopci,
+  plastové mantinely s odřeninami, tráva, stromy a kameny; retro buginy jako 3D modely
+  (otáčí se jim kola, natáčí přední kola, karoserie se naklání); bez WebGL záložní 2D
 - 🎮 **Předvídatelné ovládání jako v originále** — auto jede tam, kam míří (jen mírný
   smyk), otočí se i na místě, má skutečnou brzdu a stejný vstup dá vždy stejnou jízdu
 - 🧱 **Pevné mantinely** — od zdí se auto odrazí, z trati nevypadne
@@ -102,6 +105,8 @@ za vylepšení auta. AI soupeři se v průběhu šampionátu také zlepšují.
 | `style.css`        | vzhled a responzivní škálování                            |
 | `js/sim.js`        | **simulační jádro** — trati, fyzika, AI, svět (sdílené)   |
 | `js/audio.js`      | syntetizovaný zvuk (Web Audio)                            |
+| `js/render3d.js`   | 3D vykreslování (three.js): terén, mantinely, okolí, buginy |
+| `js/vendor/`       | three.js 0.160.0 (licence MIT, viz `THREE-LICENSE`)       |
 | `js/net.js`        | klientská síťová vrstva (WebSocket)                       |
 | `js/main.js`       | vstup, vykreslování, UI, herní smyčka, režimy             |
 | `server/server.js` | herní server (statické soubory + lobby + simulace)        |

@@ -26,12 +26,15 @@ html, body {
 }
 
 canvas {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   display: block;
-  background: #0a120c;
-  image-rendering: optimizeQuality;
 }
+/* 3D scéna dole, nad ní průhledné plátno s HUD (ve 2D režimu kreslí vše) */
+#view3d { background: #0a120c; }
+#game { background: transparent; }
 
 .mute-btn {
   position: absolute;
