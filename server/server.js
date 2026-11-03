@@ -71,13 +71,19 @@ function makeRoom(hostConn, hostName) {
 function addPlayer(room, conn, name) {
   const pid = "p" + (pidSeq++);
   const color = PLAYER_COLORS[room.order.length % PLAYER_COLORS.length];
-  const player = { id: pid, name: name || "Hráč", color, conn, input: emptyInput() };
+  const player = { id: pid, name: cleanName(name), color, conn, input: emptyInput() };
   room.players.set(pid, player);
   room.order.push(pid);
   if (!room.hostId) room.hostId = pid;
   conn.pid = pid;
   conn.roomCode = room.code;
   return player;
+}
+
+// jméno od hráče: bez znaků HTML, nejvýš 14 znaků
+function cleanName(name) {
+  const n = String(name || "").replace(/[<>&"'`]/g, "").replace(/\s+/g, " ").trim().slice(0, 14);
+  return n || "Hráč";
 }
 
 function emptyInput() { return { up: false, down: false, left: false, right: false, nitro: false }; }
@@ -233,7 +239,7 @@ function handleMessage(conn, msg) {
     if (typeof m.trackIndex === "number") o.trackIndex = Math.max(0, Math.min(IMR.TRACKS.length - 1, m.trackIndex | 0));
     if (typeof m.laps === "number") o.laps = Math.max(1, Math.min(9, m.laps | 0));
     if (typeof m.aiCount === "number") o.aiCount = Math.max(0, Math.min(4, m.aiCount | 0));
-    if (typeof m.aiDifficulty === "string") o.aiDifficulty = m.aiDifficulty;
+    if (m.aiDifficulty in AI_SKILL) o.aiDifficulty = m.aiDifficulty;
     broadcastLobby(room);
     return;
   }
@@ -272,10 +278,16 @@ function handleClose(conn) {
 }
 
 /* ---------------- Start ---------------- */
+const conns = new Set();
 ws.attach(httpServer, (conn) => {
+  conns.add(conn);
   conn.onmessage = (msg) => handleMessage(conn, msg);
-  conn.onclose = () => handleClose(conn);
+  conn.onclose = () => { conns.delete(conn); handleClose(conn); };
 });
+
+// Hosting (proxy) ruší spojení, kterými dlouho nic neteče (např. čekání v lobby);
+// pravidelný ping je udrží naživu.
+setInterval(() => { for (const c of conns) c.ping(); }, Number(process.env.PING_MS) || 25000);
 
 httpServer.listen(PORT, () => {
   console.log(`Iron Man Offroad Racing server běží na http://localhost:${PORT}`);

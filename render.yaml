@@ -1,0 +1,11 @@
+# Nasazení na Render (render.com): bezplatná webová služba, která umí WebSockety.
+# Hru i server pro online hru obsluhuje jeden proces (server/server.js); port dodá Render v proměnné PORT.
+services:
+  - type: web
+    name: iron-man-offroad
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /
+    autoDeploy: true

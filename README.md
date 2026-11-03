@@ -50,6 +50,17 @@ Port lze změnit přes proměnnou prostředí `PORT`:
 PORT=8080 node server/server.js
 ```
 
+### Veřejně na internetu (Render)
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/veronikaprostredni/buggyrace)
+
+1. Klikni na tlačítko výše a přihlas se do Renderu účtem GitHub.
+2. Render načte nastavení z `render.yaml` (bezplatná webová služba). Potvrď **Deploy**.
+3. Po pár minutách dostaneš adresu `https://….onrender.com`. Na ní běží hra
+   i online server; pošli ji ostatním hráčům spolu s kódem místnosti.
+
+Bezplatná služba po 15 minutách bez provozu usne; první načtení ji pak asi
+minutu probouzí. Každý push do `main` se nasadí automaticky.
+
 ## 🎮 Ovládání
 
 **Lokální hra (jedna klávesnice):**

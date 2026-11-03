@@ -267,7 +267,7 @@
     resultsAction = "again";
     const box = document.getElementById("resultTimes");
     box.innerHTML = ranked.map((c, i) =>
-      `<div class="row" style="color:${c.color}"><span>${i + 1}. ${c.name}</span>` +
+      `<div class="row" style="color:${c.color}"><span>${i + 1}. ${esc(c.name)}</span>` +
       `<span>${c.finished ? formatTime(c.finishTime) : "—"}</span></div>`).join("");
     results.classList.remove("hidden");
   }
@@ -281,7 +281,7 @@
     resultsAction = "menu";
     const box = document.getElementById("resultTimes");
     box.innerHTML = standings.map((p, i) =>
-      `<div class="row" style="color:${p.color}"><span>${i + 1}. ${p.name}</span>` +
+      `<div class="row" style="color:${p.color}"><span>${i + 1}. ${esc(p.name)}</span>` +
       `<span>${champ.wins[p.id] || 0}× 🥇</span></div>`).join("");
     results.classList.remove("hidden");
   }
@@ -345,6 +345,11 @@
 
   function nextChampRace() {
     beginRace(IMR.TRACKS[champ.trackOrder[champ.raceIndex]]);
+  }
+
+  // text od ostatních hráčů (jména) nikdy nevkládat do HTML neupravený
+  function esc(t) {
+    return String(t).replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
   }
 
   function formatTime(t) {
@@ -931,7 +936,7 @@
     document.getElementById("againBtn").textContent = isHost ? "ZPĚT DO LOBBY" : "ZPĚT DO MENU";
     resultsAction = isHost ? "online-again" : "online-leave";
     document.getElementById("resultTimes").innerHTML = m.ranking.map((c, i) =>
-      `<div class="row" style="color:${c.color}"><span>${i + 1}. ${c.name}</span>` +
+      `<div class="row" style="color:${c.color}"><span>${i + 1}. ${esc(c.name)}</span>` +
       `<span>${c.finished ? formatTime(c.finishTime) : "—"}</span></div>`).join("");
     results.classList.remove("hidden");
   });
@@ -941,7 +946,7 @@
     document.getElementById("roomCode").textContent = m.code;
     const list = document.getElementById("lobbyPlayers");
     list.innerHTML = m.players.map((p) =>
-      `<li style="border-color:${p.color}"><span class="dotc" style="background:${p.color}"></span>${p.name}${p.host ? " 👑" : ""}${p.id === Net.you ? " (ty)" : ""}</li>`).join("");
+      `<li style="border-color:${p.color}"><span class="dotc" style="background:${p.color}"></span>${esc(p.name)}${p.host ? " 👑" : ""}${p.id === Net.you ? " (ty)" : ""}</li>`).join("");
 
     const isHost = m.hostId === Net.you;
     const hostOpts = document.getElementById("lobbyHostOpts");

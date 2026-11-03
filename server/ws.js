@@ -5,6 +5,7 @@
 "use strict";
 const crypto = require("crypto");
 const GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+const MAX_PAYLOAD = 16 * 1024;
 
 function accept(key) {
   return crypto.createHash("sha1").update(key + GUID).digest("base64");
@@ -42,6 +43,7 @@ class Conn {
       if (b.length < 10) return false;
       len = Number(b.readBigUInt64BE(2)); offset = 10;
     }
+    if (len > MAX_PAYLOAD) { this.close(); return false; }   // obří zprávy hra nikdy neposílá
     let maskKey;
     if (masked) {
       if (b.length < offset + 4) return false;
@@ -85,6 +87,7 @@ class Conn {
     try { this.socket.write(Buffer.concat([header, data])); } catch (e) { this._close(); }
   }
 
+  ping() { this._send(Buffer.alloc(0), 0x9); }   // prohlížeč odpoví sám (pong)
   sendText(str) { this._send(Buffer.from(str, "utf8"), 0x1); }
   sendJSON(obj) { this.sendText(JSON.stringify(obj)); }
 
