@@ -118,6 +118,27 @@
     src.start(t); src.stop(t + 0.2);
   }
 
+  // náraz do mantinelu (kovové ťuknutí) nebo dopad ze skoku (tupé žuchnutí), hlasitost dle síly
+  let lastImpact = 0;
+  function impact(power, kind) {
+    if (!ready() || !noiseBuffer) return;
+    const t = ctx.currentTime;
+    if (t - lastImpact < 0.08) return;
+    lastImpact = t;
+    const vol = Math.min(0.35, 0.08 + power * 0.06);
+    const src = ctx.createBufferSource();
+    src.buffer = noiseBuffer;
+    const filter = ctx.createBiquadFilter();
+    filter.type = kind === "wall" ? "bandpass" : "lowpass";
+    filter.frequency.value = kind === "wall" ? 900 : 220;
+    const g = ctx.createGain();
+    src.connect(filter); filter.connect(g); g.connect(master);
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + (kind === "wall" ? 0.12 : 0.22));
+    src.start(t); src.stop(t + 0.25);
+    if (kind === "land") blip(70, 0.15, "sine", vol);
+  }
+
   function countdownTick(n) {
     if (n > 0) blip(440, 0.18, "square", 0.3);
     else blip(880, 0.5, "sawtooth", 0.35);   // GO!
@@ -147,7 +168,7 @@
 
   global.Sound = {
     init, ready, updateEngine, stopEngine, stopAllEngines,
-    setNitro, collision, countdownTick, finishFanfare, pickup,
+    setNitro, collision, impact, countdownTick, finishFanfare, pickup,
     setMuted, toggleMute, isMuted,
   };
 })(typeof window !== "undefined" ? window : globalThis);

@@ -14,11 +14,18 @@ JavaScript, server v Node.js **bez jakýchkoli externích závislostí**.
 - 🏆 **Šampionát** — série 5 závodů s **nakupováním vylepšení** mezi koly
   (motor, zrychlení, pneumatiky, nitro) za vyhrané peníze, jako v originále
 - 🔊 **Zvuky** motorů (výška dle rychlosti), nitra, nárazů, odpočtu, sběru a cíle
-- 🖥️ **Hra na celou obrazovku** (tlačítko / klávesa **F**), široká plastická trať
-- 🧪 **Propracovaná fyzika** — vektor rychlosti, přilnavost a smyk (drift)
+- 🖥️ **Hra na celou obrazovku** (tlačítko / klávesa **F**)
+- 🕶️ **3/4 perspektiva (~75°)** jako originál — vyvýšené 3D mantinely, plastický terén
+- 🎮 **Předvídatelné ovládání jako v originále** — auto jede tam, kam míří (jen mírný
+  smyk), otočí se i na místě, má skutečnou brzdu a stejný vstup dá vždy stejnou jízdu
+- 🧱 **Pevné mantinely** — od zdí se auto odrazí, z trati nevypadne
+- ⛰️ **Plastický terén** — táhlé vlny (do kopce brzdí, z kopce zrychlí), skokánky
+  (v rychlosti auto vyletí a ve vzduchu nezatáčí) a hrboly; hliněná aréna s balvany
 - 🟥 **Terén ve stylu originálu** — červeno-bílé mantinely, blátivé a vodní louže
 - 🎁 **Balíčky odměn** na trati — nitro, peníze, pneumatiky (grip), zrychlení
-- 🔥 Nitro turbo, vzájemné narážení aut
+- 💨 **Efekty** — jiskry nitra, šplouchání bláta/vody, prach za koly, oblak při dopadu,
+  jiskry a zvuk při nárazu do mantinelu
+- 🔥 **Nitro jako zásoba** — sbírej ho a vypusť klávesou, kdy se ti hodí
 
 ## ▶️ Spuštění
 
@@ -52,7 +59,7 @@ PORT=8080 node server/server.js
 | Plyn            | **W**            | **↑**          |
 | Brzda/zpátečka  | **S**            | **↓**          |
 | Zatáčení        | **A / D**        | **← / →**      |
-| Nitro           | **Levý Shift**   | **Pravý Shift**|
+| Nitro (vypustit) | **Levý Shift**  | **Pravý Shift**|
 
 **Online hra (na svém zařízení):** ovládej buď **WASD + Levý Shift**,
 nebo **šipky + Pravý Shift** — obě sady řídí tvé auto.
