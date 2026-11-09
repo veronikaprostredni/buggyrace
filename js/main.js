@@ -10,6 +10,7 @@
   const ctx = canvas.getContext("2d");
   const W = IMR.WORLD_W, H = IMR.WORLD_H;
   const FIXED_DT = IMR.FIXED_DT;
+  const BASE_MAX_SPEED = IMR.BASE.maxSpeed;
   const TOTAL_LAPS = 3;
 
   /* ---------------- Kamera / 2.5D perspektiva (~75°) ---------------- */
@@ -31,7 +32,14 @@
     camOffY = (canvas.height - (H * TILT + HUD_H) * camS) / 2 + (WALL_H + HUD_H) * camS;
   }
   function setGround() { ctx.setTransform(camS, 0, 0, camS * TILT, camOffX, camOffY); }   // zem (stlačená)
-  function setHud() { ctx.setTransform(camS, 0, 0, camS, camOffX, camOffY - (HUD_H + WALL_H) * camS); }   // HUD lišta nad tratí
+  // 3D vykreslování (render3d.js) je k dispozici, když se modul načetl a WebGL funguje
+  function use3d() { return !!(window.Render3D && window.Render3D.ok); }
+  // měřítko HUD ve 3D: lišta je vždy nahoře přes celou šířku
+  function hudScale() { return Math.min(canvas.width / W, canvas.height / 560); }
+  function setHud() {
+    if (use3d()) { const hs = hudScale(); ctx.setTransform(hs, 0, 0, hs, (canvas.width - W * hs) / 2, 0); return; }
+    ctx.setTransform(camS, 0, 0, camS, camOffX, camOffY - (HUD_H + WALL_H) * camS);   // HUD lišta nad tratí
+  }
   function setOverlay() { ctx.setTransform(camS, 0, 0, camS, camOffX, camOffY); }                         // překryv přes trať
   function projX(x) { return camOffX + x * camS; }
   function projY(y) { return camOffY + y * camS * TILT; }
@@ -187,6 +195,7 @@
   function toMenu() {
     state = STATE.MENU;
     Sound.stopAllEngines();
+    Sound.crowd(false);
     overlay.classList.remove("hidden");
     results.classList.add("hidden");
   }
@@ -211,6 +220,7 @@
     lastCountInt = 4;
     finishPlayed = false;
     state = STATE.COUNTDOWN;
+    Sound.crowd(true);
     overlay.classList.add("hidden");
     results.classList.add("hidden");
     shop.classList.add("hidden");
@@ -467,18 +477,24 @@
       }
       if (collided) Sound.collision();
       for (const c of world.cars) if (!c.finished) spawnCarFx(world.track, c);
-      updateEngineSounds();
+      updateEngineSounds(inputs);
       if (state === STATE.RACE && world.allFinished()) finishRace();
     }
   }
 
-  function updateEngineSounds() {
-    for (const c of world.cars) {
-      if (c.isAI || c.remote) continue;   // zvuk motoru jen pro místní hráče
-      const ratio = Math.min(1, Math.abs(c.speed) / c.phys.maxSpeed);
-      Sound.updateEngine(c.id, ratio, !c.finished);
+  // zvuk motoru a kol místních hráčů (Hráč 1 víc vlevo, Hráč 2 víc vpravo)
+  function updateEngineSounds(inputs) {
+    const humans = world.cars.filter((c) => !c.isAI);
+    humans.forEach((c, i) => {
+      const inp = inputs[c.id] || {};
+      const slip = Math.abs(-c.vx * Math.sin(c.angle) + c.vy * Math.cos(c.angle));   // boční skluz
+      Sound.updateCar(c.id, {
+        speed: Math.abs(c.speed) / BASE_MAX_SPEED, throttle: !!(inp.up || (inp.nitro && c.nitro > 0)),
+        slip, rough: c.rough, air: c.air, boosting: c.boosting, on: !c.finished,
+        pan: humans.length > 1 ? (i === 0 ? -0.35 : 0.35) : 0,
+      });
       Sound.setNitro(c.id, c.boosting);
-    }
+    });
   }
 
   /* ---------------- Vykreslení ---------------- */
@@ -801,18 +817,47 @@
   }
 
   function drawCountdown(value) {
-    setOverlay();
-    ctx.fillStyle = "rgba(0,0,0,0.35)";
-    ctx.fillRect(0, 0, W, H * TILT);
+    let cy;
+    if (use3d()) {
+      const hs = hudScale(), bar = HUD_H * hs;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.fillStyle = "rgba(0,0,0,0.3)";
+      ctx.fillRect(0, bar, canvas.width, canvas.height - bar);
+      setHud();
+      cy = (canvas.height / hs + HUD_H) / 2;
+    } else {
+      setOverlay();
+      ctx.fillStyle = "rgba(0,0,0,0.35)";
+      ctx.fillRect(0, 0, W, H * TILT);
+      cy = H * TILT / 2;
+    }
     const n = Math.ceil(value - 1);
     ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = "#f6c544";
-    const cy = H * TILT / 2;
     if (n > 0) { ctx.font = "bold 150px 'Segoe UI', sans-serif"; ctx.fillText(n, W / 2, cy); }
     else { ctx.font = "bold 110px 'Segoe UI', sans-serif"; ctx.fillText("START!", W / 2, cy); }
   }
 
   // společné vykreslení scény: statická vrstva z mezipaměti + částice, balíčky a auta
   function drawScene(track, carList, pickups) {
+    if (use3d()) {
+      const dpr = canvas.width / (canvas.clientWidth || canvas.width);
+      window.Render3D.render({ track, cars: carList, pickups, particles, hudCss: HUD_H * hudScale() / dpr });
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      // horní lišta HUD a jmenovky aut nad 3D scénou
+      ctx.fillStyle = "rgba(6,10,7,0.92)";
+      ctx.fillRect(0, 0, canvas.width, HUD_H * hudScale());
+      ctx.font = `600 ${Math.round(11 * dpr)}px 'Segoe UI', sans-serif`;
+      ctx.textAlign = "center"; ctx.textBaseline = "bottom";
+      for (const c of carList) {
+        const p = window.Render3D.project(c.x, c.y, (c.z || 0) + 34);
+        if (!p) continue;
+        const label = c.isAI ? "CPU" : c.name;
+        ctx.fillStyle = "rgba(0,0,0,0.55)"; ctx.fillText(label, p.x * dpr + dpr, p.y * dpr + dpr);
+        ctx.fillStyle = c.color; ctx.fillText(label, p.x * dpr, p.y * dpr);
+      }
+      return;
+    }
     computeCamera();
     const key = track.def.id + ":" + canvas.width + "x" + canvas.height;
     if (key !== groundKey) { groundCache = buildGroundLayer(track); groundKey = key; }
@@ -867,6 +912,7 @@
     inOnline = false;
     netGame.active = false;
     Sound.stopAllEngines();
+    Sound.crowd(false);
     onlineOverlay.classList.add("hidden");
     overlay.classList.remove("hidden");
   }
@@ -888,6 +934,7 @@
     netGame.active = false;
     state = STATE.MENU;
     Sound.stopAllEngines();
+    Sound.crowd(false);
     inOnline = true;
     onlineOverlay.classList.remove("hidden");
     onlineConnect.classList.add("hidden");
@@ -910,6 +957,7 @@
     onlineOverlay.classList.add("hidden");
     results.classList.add("hidden");
     Sound.init();
+    Sound.crowd(true);
   });
 
   Net.on("state", (m) => {
@@ -993,11 +1041,15 @@
       const s = JSON.stringify(inp);
       if (s !== netGame.lastInputStr) { Net.sendInput(inp); netGame.lastInputStr = s; }
     }
-    // zvuk motoru lokálního hráče
-    const me = netGame.cars[Net.you];
+    // zvuk motoru a kol lokálního hráče
+    const me = netGame.cars[Net.you], dme = netGame.disp[Net.you];
     if (me) {
-      const ratio = Math.min(1, Math.abs(me.sp || 0) / 6);
-      Sound.updateEngine("self", ratio, netGame.phase === "race" && !me.f);
+      const inp = onlineInput();
+      Sound.updateCar("self", {
+        speed: Math.abs(me.sp || 0) / BASE_MAX_SPEED, throttle: !!(inp.up || (inp.nitro && me.n > 0)),
+        rough: netGame.track ? IMR.surfaceAt(netGame.track, me.x, me.y).rough : false,
+        air: dme ? dme.z - dme.gz > 2 : false, boosting: !!me.b, on: netGame.phase === "race" && !me.f,
+      });
       Sound.setNitro("self", !!me.b);
     }
     // efekty pro všechna auta podle snapshotu
